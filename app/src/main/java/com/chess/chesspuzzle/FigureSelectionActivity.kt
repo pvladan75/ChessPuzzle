@@ -28,15 +28,20 @@ import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
 
 // UVEZITE sve definicije iz novog fajla ChessDefinitions.kt
-import com.chess.chesspuzzle.*
+import com.chess.chesspuzzle.PieceType // Konkretan import umesto zvezdice, za bolju praksu
 
 class FigureSelectionActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // KLJUČNO: Dohvati ime igrača iz Intent-a koje je poslato iz MainActivity
+        val playerName = intent.getStringExtra("playerName") ?: "Anonimni"
+
         setContent {
             ChessPuzzleTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    FigureSelectionScreen()
+                    // Prosledi playerName Composable funkciji FigureSelectionScreen
+                    FigureSelectionScreen(playerName = playerName)
                 }
             }
         }
@@ -44,25 +49,30 @@ class FigureSelectionActivity : ComponentActivity() {
 }
 
 @Composable
-fun FigureSelectionScreen() {
+fun FigureSelectionScreen(playerName: String) { // FigureSelectionScreen sada prima playerName
     val context = LocalContext.current
     var selectedDifficulty by remember { mutableStateOf("Lako") }
+    // Vraćeno na mutableStateListOf<PieceType>() da se figure resetuju pri promeni težine
     val selectedFigures = remember { mutableStateListOf<PieceType>() }
 
     // Mapa koja definiše koliko figura je potrebno za svaki nivo
-    val requiredFigures = mapOf(
-        "Lako" to (1 to 2), // Lako: min 1, max 2 bele figure
-        "Srednje" to (2 to 2), // Srednje: tačno 2 bele figure
-        "Teško" to (2 to 3)    // Teško: min 2, max 3 bele figure
-    )
+    val requiredFigures = remember { // Dodato remember radi optimizacije
+        mapOf(
+            "Lako" to (1 to 2), // Lako: min 1, max 2 bele figure
+            "Srednje" to (2 to 2), // Srednje: tačno 2 bele figure
+            "Teško" to (2 to 3)    // Teško: min 2, max 3 bele figure
+        )
+    }
 
     // Mapa koja definiše opseg broja POTEZA (crnih figura).
     // Za Teško, ovo sada predstavlja UKUPAN broj pešaka na tabli.
-    val numberOfMovesRange = mapOf(
-        "Lako" to (5 to 6),  // Lako: 5-6 crnih figura
-        "Srednje" to (3 to 4), // Srednje: 3-4 crne figure
-        "Teško" to (12 to 13) // Teško: 12-13 crnih figura (UKUPNO)
-    )
+    val numberOfMovesRange = remember { // Dodato remember radi optimizacije
+        mapOf(
+            "Lako" to (5 to 6),  // Lako: 5-6 crnih figura
+            "Srednje" to (3 to 4), // Srednje: 3-4 crne figure
+            "Teško" to (12 to 13) // Teško: 12-13 crnih figura (UKUPNO)
+        )
+    }
 
     val currentRequiredMin = requiredFigures[selectedDifficulty]?.first ?: 1
     val currentRequiredMax = requiredFigures[selectedDifficulty]?.second ?: 1
@@ -74,6 +84,10 @@ fun FigureSelectionScreen() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // Prikaz imena igrača na ekranu za odabir figura
+        Text("Ime igrača: $playerName", style = MaterialTheme.typography.titleLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text("Odaberite težinu:", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -85,7 +99,8 @@ fun FigureSelectionScreen() {
                             selected = (text == selectedDifficulty),
                             onClick = {
                                 selectedDifficulty = text
-                                selectedFigures.clear() // Resetuj odabrane figure pri promeni težine
+                                // KLJUČNO: Resetuj odabrane figure pri promeni težine
+                                selectedFigures.clear()
                             },
                             role = Role.RadioButton
                         )
@@ -133,7 +148,8 @@ fun FigureSelectionScreen() {
                                     if (isSelected) {
                                         selectedFigures.remove(pieceType)
                                     } else {
-                                        if (selectedFigures.size < currentRequiredMax) { // Dozvoli dodavanje do max
+                                        // Dozvoli dodavanje do max figura za trenutnu težinu
+                                        if (selectedFigures.size < currentRequiredMax) {
                                             selectedFigures.add(pieceType)
                                         } else {
                                             Toast.makeText(context, "Već ste odabrali maksimalan broj figura za ovaj nivo ($currentRequiredMax)!", Toast.LENGTH_SHORT).show()
@@ -165,6 +181,7 @@ fun FigureSelectionScreen() {
         }
         Spacer(modifier = Modifier.height(32.dp))
 
+        // Provera da li je broj selektovanih figura validan za trenutnu težinu
         val canStartGame = selectedFigures.size in currentRequiredMin..currentRequiredMax && selectedFigures.isNotEmpty()
 
         Button(
@@ -174,8 +191,10 @@ fun FigureSelectionScreen() {
                         putExtra("difficulty", selectedDifficulty)
                         putStringArrayListExtra("selectedFigures", ArrayList(selectedFigures.map { it.name }))
                         // Dodaj min/max poteze u Intent
-                        putExtra("minMoves", currentMovesMin) // Ovo su sada ukupni min pešaci
-                        putExtra("maxMoves", currentMovesMax) // Ovo su sada ukupni max pešaci
+                        putExtra("minMoves", currentMovesMin)
+                        putExtra("maxMoves", currentMovesMax)
+                        // KLJUČNO: Prosledi ime igrača u GameActivity
+                        putExtra("playerName", playerName)
                     }
                     context.startActivity(intent)
                 } else {
@@ -197,6 +216,7 @@ fun FigureSelectionScreen() {
 @Composable
 fun FigureSelectionPreview() {
     ChessPuzzleTheme {
-        FigureSelectionScreen()
+        // U preview-u, simuliraćemo da je ime "Preview Igrač"
+        FigureSelectionScreen(playerName = "Preview Igrač")
     }
 }
