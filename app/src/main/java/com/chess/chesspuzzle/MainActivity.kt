@@ -132,6 +132,17 @@ fun MainMenu(playerName: String) { // Dodat playerName kao parametar
             ) {
                 Text("Najbolji Rezultati")
             }
+
+            // NOVO DUGME: Za pokretanje SolutionDisplayActivity
+            Button(
+                onClick = {
+                    val intent = Intent(context, SolutionDisplayActivity::class.java)
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            ) {
+                Text("Prikaži Rešenja Zagonetki (TEST)")
+            }
         }
     }
 }

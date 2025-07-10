@@ -43,6 +43,9 @@
             android:exported="false"
             android:label="Najbolji Rezultati"
             android:theme="@style/Theme.ChessPuzzle" />
+        <activity
+            android:name=".SolutionDisplayActivity"
+            android:exported="false" />
     </application>
 
 </manifest>

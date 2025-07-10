@@ -25,7 +25,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
 import kotlinx.coroutines.delay
-import androidx.compose.ui.text.style.TextAlign // Dodaj ovaj import za TextAlign!
+import androidx.compose.ui.text.style.TextAlign
+
+// KLJUČNO: Dodaj import za ChessBoardComposable
+import com.chess.chesspuzzle.ChessBoardComposable // Preporuka: Stavi u isti paket ili odgovarajući 'ui' podpaket
 
 // Glavna aktivnost za igru
 class GameActivity : ComponentActivity() {
@@ -36,7 +39,6 @@ class GameActivity : ComponentActivity() {
         Log.d("GameActivity", "Initializing SoundPool from GameActivity onCreate...")
         PuzzleGenerator.initializeSoundPool(applicationContext)
 
-        // Dohvati podatke iz Intent-a
         val difficulty = intent.getStringExtra("difficulty") ?: "Lako"
         val selectedFiguresNames = intent.getStringArrayListExtra("selectedFigures") ?: arrayListOf()
         val selectedFigures = selectedFiguresNames.mapNotNull {
@@ -49,7 +51,6 @@ class GameActivity : ComponentActivity() {
         }
         val minMoves = intent.getIntExtra("minMoves", 1)
         val maxMoves = intent.getIntExtra("maxMoves", 1)
-        // KLJUČNO: Dohvati ime igrača iz Intent-a
         val playerName = intent.getStringExtra("playerName") ?: "Anonimni"
 
         Log.d("GameActivity", "Pokrenut GameActivity sa težinom: $difficulty, figurama: ${selectedFigures.joinToString()}, poteza: $minMoves-$maxMoves, igrač: $playerName")
@@ -65,7 +66,7 @@ class GameActivity : ComponentActivity() {
                         selectedFigures = selectedFigures,
                         minMoves = minMoves,
                         maxMoves = maxMoves,
-                        playerName = playerName // Prosledi ime igrača Composable-u
+                        playerName = playerName
                     )
                 }
             }
@@ -79,7 +80,6 @@ class GameActivity : ComponentActivity() {
     }
 }
 
-// Dodat 'playerName' kao parametar ChessGameScreen-u
 @Composable
 fun ChessGameScreen(difficulty: String, selectedFigures: List<PieceType>, minMoves: Int, maxMoves: Int, playerName: String) {
     val context = LocalContext.current
@@ -87,7 +87,8 @@ fun ChessGameScreen(difficulty: String, selectedFigures: List<PieceType>, minMov
     var board: ChessBoard by remember { mutableStateOf(ChessBoard.createEmpty()) }
     var initialBoardBackup: ChessBoard by remember { mutableStateOf(ChessBoard.createEmpty()) }
 
-    var blackPieces: Map<Square, Boolean> by remember { mutableStateOf(emptyMap()) }
+    // ISPRAVLJENO: Promenjen tip u Map<Square, Piece>
+    var blackPieces: Map<Square, Piece> by remember { mutableStateOf(emptyMap()) }
 
     var puzzleCompleted: Boolean by remember { mutableStateOf(false) }
     var noMoreMoves: Boolean by remember { mutableStateOf(false) }
@@ -98,12 +99,13 @@ fun ChessGameScreen(difficulty: String, selectedFigures: List<PieceType>, minMov
     var currentSessionScore by remember { mutableStateOf(0) }
 
     var selectedSquare: Square? by remember { mutableStateOf(null) }
+    // NOVO: Stanje za obeležavanje mogućih poteza
+    var highlightedSquares: Set<Square> by remember { mutableStateOf(emptySet()) }
 
     LaunchedEffect(gameStarted) {
         while (gameStarted) {
             delay(1000L)
             timeElapsedSeconds++
-            // Log.d("GameTimer", "Vreme proteklo: $timeElapsedSeconds s") // Smanjio log da ne spamuje konzolu
         }
     }
 
@@ -140,19 +142,20 @@ fun ChessGameScreen(difficulty: String, selectedFigures: List<PieceType>, minMov
 
     val checkGameStatus: (ChessBoard) -> Unit = { currentBoardSnapshot ->
         val updatedBlackPiecesMap = currentBoardSnapshot.getPiecesMapFromBoard(PieceColor.BLACK)
-        blackPieces = updatedBlackPiecesMap
+        blackPieces = updatedBlackPiecesMap // Ovo je sada OK jer su tipovi usklađeni
 
         if (updatedBlackPiecesMap.isEmpty()) {
             puzzleCompleted = true
             gameStarted = false
             selectedSquare = null
+            highlightedSquares = emptySet() // Očisti obeležavanja kada je zagonetka rešena
             solvedPuzzlesCount++
             val scoreForPuzzle = calculateScore(timeElapsedSeconds, difficulty)
             currentSessionScore += scoreForPuzzle
             Toast.makeText(context, "Čestitamo! Rešili ste zagonetku! +$scoreForPuzzle bodova! Ukupno: $currentSessionScore", Toast.LENGTH_LONG).show()
             PuzzleGenerator.playSound(context, true)
             try {
-                ScoreManager.addScore(ScoreEntry(playerName, currentSessionScore), difficulty) // Koristi prosleđeno ime
+                ScoreManager.addScore(ScoreEntry(playerName, currentSessionScore), difficulty)
                 Log.d("GameActivity", "Skor uspešno sačuvan (Zagonetka rešena).")
             } catch (e: Exception) {
                 Log.e("GameActivity", "Greška pri čuvanju skora (Zagonetka rešena): ${e.message}", e)
@@ -187,10 +190,11 @@ fun ChessGameScreen(difficulty: String, selectedFigures: List<PieceType>, minMov
                 noMoreMoves = true
                 gameStarted = false
                 selectedSquare = null
+                highlightedSquares = emptySet() // Očisti obeležavanja kada nema više poteza
                 Toast.makeText(context, "Nema više legalnih poteza za hvatanje crnih figura!", Toast.LENGTH_LONG).show()
                 PuzzleGenerator.playSound(context, false)
                 try {
-                    ScoreManager.addScore(ScoreEntry(playerName, currentSessionScore), difficulty) // Koristi prosleđeno ime
+                    ScoreManager.addScore(ScoreEntry(playerName, currentSessionScore), difficulty)
                     Log.d("GameActivity", "Skor uspešno sačuvan (Nema više poteza).")
                 } catch (e: Exception) {
                     Log.e("GameActivity", "Greška pri čuvanju skora (Nema više poteza): ${e.message}", e)
@@ -201,7 +205,6 @@ fun ChessGameScreen(difficulty: String, selectedFigures: List<PieceType>, minMov
                 gameStarted = true
             }
         }
-        // currentBoardSnapshot.printBoard() // Smanjio log da ne spamuje konzolu
     }
 
     val generateNewPuzzle: () -> Unit = {
@@ -212,7 +215,7 @@ fun ChessGameScreen(difficulty: String, selectedFigures: List<PieceType>, minMov
             currentSessionScore = (currentSessionScore - penalty).coerceAtLeast(0)
             Toast.makeText(context, "Zagonetka preskočena! -$penalty bodova. Trenutni skor: $currentSessionScore", Toast.LENGTH_SHORT).show()
             try {
-                ScoreManager.addScore(ScoreEntry(playerName, currentSessionScore), difficulty) // Koristi prosleđeno ime
+                ScoreManager.addScore(ScoreEntry(playerName, currentSessionScore), difficulty)
                 Log.d("GameActivity", "Skor uspešno sačuvan (Zagonetka preskočena).")
             } catch (e: Exception) {
                 Log.e("GameActivity", "Greška pri čuvanju skora (Zagonetka preskočena): ${e.message}", e)
@@ -233,34 +236,31 @@ fun ChessGameScreen(difficulty: String, selectedFigures: List<PieceType>, minMov
         noMoreMoves = false
         timeElapsedSeconds = 0
         selectedSquare = null
+        highlightedSquares = emptySet() // Resetuj obeležavanja kod nove zagonetke
         gameStarted = true
     }
 
     LaunchedEffect(Unit) {
-        // Kada se GameActivity pokrene, odmah generiši zagonetku.
         if (board.getPiecesMapFromBoard(PieceColor.WHITE).isEmpty() && board.getPiecesMapFromBoard(PieceColor.BLACK).isEmpty()) {
             generateNewPuzzle()
         }
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp), // Dodato padding celoj koloni
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top // Poravnato na vrh
+        verticalArrangement = Arrangement.Top
     ) {
-        // Red sa informacijama o igraču i težini
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(text = "Igrač: $playerName", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            // ISPRAVLJENO: Uklonjen je '.also { /* align text to end */ }'
             Text(text = "Težina: $difficulty", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
         }
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Red sa vremenom i rešenim zagonetkama/skorom
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -268,14 +268,12 @@ fun ChessGameScreen(difficulty: String, selectedFigures: List<PieceType>, minMov
         ) {
             Text(text = "Vreme: ${timeElapsedSeconds}s", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Text(text = "Rešeno: ${solvedPuzzlesCount}", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            // ISPRAVLJENO: Uklonjen je '.also { /* align text to end */ }'
             Text(text = "Skor: ${currentSessionScore}", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
         }
-        Spacer(modifier = Modifier.height(16.dp)) // Više razmaka pre table
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Statusna poruka (rešeno/nema više poteza/preostalo figura)
         Box(
-            modifier = Modifier.fillMaxWidth().height(40.dp), // Fiksna visina za poruku
+            modifier = Modifier.fillMaxWidth().height(40.dp),
             contentAlignment = Alignment.Center
         ) {
             if (puzzleCompleted) {
@@ -292,184 +290,134 @@ fun ChessGameScreen(difficulty: String, selectedFigures: List<PieceType>, minMov
                 )
             } else {
                 Text(
-                    text = "Preostalo crnih figura: ${blackPieces.size}",
+                    text = "Preostalo crnih figura: ${blackPieces.size}", // Ovo je sada ispravno
                     style = MaterialTheme.typography.headlineSmall
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp)) // Razmak između poruke i table
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Prikaz šahovske table putem izdvojene komponente ChessBoardComposable
+        ChessBoardComposable(
+            board = board,
+            selectedSquare = selectedSquare,
+            highlightedSquares = highlightedSquares, // Prosleđujemo set obeleženih polja
+            onSquareClick = { clickedSquare ->
+                // Logika hendlovanja klika na polje, premeštena iz .clickable bloka
+                if (puzzleCompleted || noMoreMoves) {
+                    Toast.makeText(context, "Igra je završena. Kliknite 'Nova Zagonetka' ili 'Resetuj poziciju'.", Toast.LENGTH_SHORT).show()
+                    return@ChessBoardComposable
+                }
+
+                val pieceOnClickedSquare = board.getPiece(clickedSquare)
+
+                if (selectedSquare == null) {
+                    if (pieceOnClickedSquare.color == PieceColor.WHITE && pieceOnClickedSquare.type != PieceType.NONE) {
+                        selectedSquare = clickedSquare
+                        // Kada se selektuje figura, prikaži njene legalne poteze
+                        val legalMoves = ChessCore.getValidMoves(board, pieceOnClickedSquare, clickedSquare)
+                        highlightedSquares = legalMoves.toSet() // Ažuriraj stanje obeleženih polja
+                        Toast.makeText(context, "${pieceOnClickedSquare.color} ${pieceOnClickedSquare.type} selektovan na ${clickedSquare.toString()}", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Morate selektovati belu figuru!", Toast.LENGTH_SHORT).show()
+                        selectedSquare = null
+                        highlightedSquares = emptySet() // Očisti obeležavanja ako ništa nije selektovano
+                    }
+                } else {
+                    val fromSquare = selectedSquare!!
+                    val toSquare = clickedSquare
+                    val pieceToMove = board.getPiece(fromSquare)
+
+                    highlightedSquares = emptySet() // Uvek očisti obeležavanja kada se pokuša potez
+
+                    if (fromSquare == toSquare) {
+                        selectedSquare = null
+                        Toast.makeText(context, "Figura deselektovana.", Toast.LENGTH_SHORT).show()
+                        return@ChessBoardComposable
+                    }
+
+                    if (pieceOnClickedSquare.color == PieceColor.WHITE && pieceOnClickedSquare.type != PieceType.NONE) {
+                        selectedSquare = clickedSquare
+                        // Promenjena selekcija, ponovo prikaži legalne poteze nove figure
+                        val legalMoves = ChessCore.getValidMoves(board, pieceOnClickedSquare, clickedSquare)
+                        highlightedSquares = legalMoves.toSet()
+                        Toast.makeText(context, "Promenjena selektovana figura na ${pieceOnClickedSquare.color} ${pieceOnClickedSquare.type} na ${clickedSquare.toString()}", Toast.LENGTH_SHORT).show()
+                        return@ChessBoardComposable
+                    }
+
+                    val legalChessMovesForSelectedPiece = ChessCore.getValidMoves(board, pieceToMove, fromSquare)
+                    val isPureChessValidMove = legalChessMovesForSelectedPiece.contains(toSquare)
+
+                    val pieceAtTarget = board.getPiece(toSquare)
+                    val isCaptureOfBlackPiece = pieceAtTarget.type != PieceType.NONE &&
+                            pieceAtTarget.color == PieceColor.BLACK &&
+                            pieceToMove.color != pieceAtTarget.color
+
+                    val isPuzzleValidMove = isPureChessValidMove && isCaptureOfBlackPiece
 
 
-        // Prikaz šahovske table
-        // Board zauzima preostali prostor u koloni, ali održava 1:1 odnos stranica
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f) // Održava kvadratni oblik (širina = visina)
-                .weight(1f), // Omogućava tabli da zauzme dostupan prostor
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            val lightSquareColor = Color(0xFFF0D9B5)
-            val darkSquareColor = Color(0xFFB58863)
-
-            for (row in 0 until 8) {
-                Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    for (col in 0 until 8) {
-                        val currentSquare = Square(file = 'a' + col, rank = 8 - row)
-
-                        val isLightSquare = (row + col) % 2 == 0
-                        val squareColor = if (isLightSquare) lightSquareColor else darkSquareColor
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(1f)
-                                .background(squareColor)
-                                .border(
-                                    width = if (currentSquare == selectedSquare) 3.dp else 0.dp,
-                                    color = if (currentSquare == selectedSquare) Color.Blue else Color.Transparent
-                                )
-                                .clickable {
-                                    if (puzzleCompleted || noMoreMoves) {
-                                        Toast.makeText(context, "Igra je završena. Kliknite 'Nova Zagonetka' ili 'Resetuj poziciju'.", Toast.LENGTH_SHORT).show()
-                                        return@clickable
-                                    }
-
-                                    val pieceOnClickedSquare = board.getPiece(currentSquare)
-
-                                    // Log.d("ChessGame", "Kliknuto na ${currentSquare.toString()}. Figura: ${pieceOnClickedSquare.type} ${pieceOnClickedSquare.color}")
-
-                                    if (selectedSquare == null) {
-                                        if (pieceOnClickedSquare.color == PieceColor.WHITE && pieceOnClickedSquare.type != PieceType.NONE) {
-                                            selectedSquare = currentSquare
-                                            Toast.makeText(context, "${pieceOnClickedSquare.color} ${pieceOnClickedSquare.type} selektovan na ${currentSquare.toString()}", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            Toast.makeText(context, "Morate selektovati belu figuru!", Toast.LENGTH_SHORT).show()
-                                            selectedSquare = null
-                                        }
-                                    } else {
-                                        val fromSquare = selectedSquare!!
-                                        val toSquare = currentSquare
-                                        val pieceToMove = board.getPiece(fromSquare)
-
-                                        if (fromSquare == toSquare) {
-                                            selectedSquare = null
-                                            Toast.makeText(context, "Figuura deselektovana.", Toast.LENGTH_SHORT).show()
-                                            return@clickable
-                                        }
-
-                                        if (pieceOnClickedSquare.color == PieceColor.WHITE && pieceOnClickedSquare.type != PieceType.NONE) {
-                                            selectedSquare = currentSquare
-                                            Toast.makeText(context, "Promenjena selektovana figura na ${pieceOnClickedSquare.color} ${pieceOnClickedSquare.type} na ${currentSquare.toString()}", Toast.LENGTH_SHORT).show()
-                                            return@clickable
-                                        }
-
-                                        val legalChessMovesForSelectedPiece = ChessCore.getValidMoves(board, pieceToMove, fromSquare)
-                                        val isPureChessValidMove = legalChessMovesForSelectedPiece.contains(toSquare)
-
-                                        val pieceAtTarget = board.getPiece(toSquare)
-                                        val isCaptureOfBlackPiece = pieceAtTarget.type != PieceType.NONE &&
-                                                pieceAtTarget.color == PieceColor.BLACK &&
-                                                pieceToMove.color != pieceAtTarget.color
-
-                                        val isPuzzleValidMove = isPureChessValidMove && isCaptureOfBlackPiece
-
-
-                                        if (isPuzzleValidMove) {
-                                            Toast.makeText(context, "Potez izvršen na ${toSquare.toString()}!", Toast.LENGTH_SHORT).show()
-                                            performMove(
-                                                fromSquare,
-                                                toSquare,
-                                                board,
-                                                updateBoardState = { newBoard -> board = newBoard },
-                                                checkGameStatus = checkGameStatus,
-                                                capture = true,
-                                                targetSquare = toSquare
-                                            )
-                                            // Ne resetuj selectedSquare odmah nakon poteza ako je potez validan.
-                                            // To omogućava lancu hvatanja. SelectedSquare se resetuje u checkGameStatus
-                                            // samo ako je zagonetka kompletirana ili nema više poteza.
-                                            if (!puzzleCompleted && !noMoreMoves) {
-                                                selectedSquare = toSquare
-                                            }
-                                            PuzzleGenerator.playSound(context, true) // Play success sound
-                                        } else if (isPureChessValidMove && !isCaptureOfBlackPiece) {
-                                            Toast.makeText(context, "U ovoj zagonetki morate pojesti crnu figuru!", Toast.LENGTH_LONG).show()
-                                            selectedSquare = null
-                                            PuzzleGenerator.playSound(context, false) // Play error sound
-                                        } else {
-                                            Toast.makeText(context, "Nije validan šahovski potez za odabranu figuru!", Toast.LENGTH_SHORT).show()
-                                            selectedSquare = null
-                                            PuzzleGenerator.playSound(context, false) // Play error sound
-                                        }
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val piece = board.getPiece(currentSquare)
-                            if (piece.type != PieceType.NONE) {
-                                val drawableResId = when (Pair(piece.type, piece.color)) {
-                                    Pair(PieceType.KNIGHT, PieceColor.WHITE) -> R.drawable.wn
-                                    Pair(PieceType.PAWN, PieceColor.BLACK) -> R.drawable.bp
-                                    Pair(PieceType.ROOK, PieceColor.WHITE) -> R.drawable.wr
-                                    Pair(PieceType.ROOK, PieceColor.BLACK) -> R.drawable.br
-                                    Pair(PieceType.BISHOP, PieceColor.WHITE) -> R.drawable.wb
-                                    Pair(PieceType.BISHOP, PieceColor.BLACK) -> R.drawable.bb
-                                    Pair(PieceType.QUEEN, PieceColor.WHITE) -> R.drawable.wq
-                                    Pair(PieceType.QUEEN, PieceColor.BLACK) -> R.drawable.bq
-                                    Pair(PieceType.KING, PieceColor.WHITE) -> R.drawable.wk
-                                    Pair(PieceType.KING, PieceColor.BLACK) -> R.drawable.bk
-                                    else -> 0
-                                }
-                                if (drawableResId != 0) {
-                                    Image(
-                                        painter = painterResource(id = drawableResId),
-                                        contentDescription = "${piece.color} ${piece.type}",
-                                        modifier = Modifier.fillMaxSize(0.8f)
-                                    )
-                                }
-                            }
+                    if (isPuzzleValidMove) {
+                        Toast.makeText(context, "Potez izvršen na ${toSquare.toString()}!", Toast.LENGTH_SHORT).show()
+                        performMove(
+                            fromSquare,
+                            toSquare,
+                            board,
+                            updateBoardState = { newBoard -> board = newBoard },
+                            checkGameStatus = checkGameStatus,
+                            capture = true,
+                            targetSquare = toSquare
+                        )
+                        if (!puzzleCompleted && !noMoreMoves) {
+                            selectedSquare = toSquare
                         }
+                        PuzzleGenerator.playSound(context, true)
+                    } else if (isPureChessValidMove && !isCaptureOfBlackPiece) {
+                        Toast.makeText(context, "U ovoj zagonetki morate pojesti crnu figuru!", Toast.LENGTH_LONG).show()
+                        selectedSquare = null
+                        PuzzleGenerator.playSound(context, false)
+                    } else {
+                        Toast.makeText(context, "Nije validan šahovski potez za odabranu figuru!", Toast.LENGTH_SHORT).show()
+                        selectedSquare = null
+                        PuzzleGenerator.playSound(context, false)
                     }
                 }
             }
-        }
-        Spacer(modifier = Modifier.height(16.dp)) // Razmak ispod table
+        )
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Dugmad za kontrolu igre - uvek vidljiva i na dnu ekrana
         Row(
             horizontalArrangement = Arrangement.SpaceEvenly,
             modifier = Modifier.fillMaxWidth()
         ) {
             Button(
                 onClick = {
-                    selectedSquare = null // Poništi selekciju
-                    board = initialBoardBackup.copy() // Vrati tablu na početno stanje
-                    checkGameStatus(board) // Ponovo proveri status (ažurira broj pešaka, pokreće tajmer)
-                    puzzleCompleted = false // Resetuj status
-                    noMoreMoves = false // Resetuj status
-                    timeElapsedSeconds = 0 // Resetuj vreme na 0 kod resetovanja pozicije
-                    gameStarted = true // Pokreni tajmer ponovo
+                    selectedSquare = null
+                    highlightedSquares = emptySet() // Resetuj obeležavanja kod resetovanja pozicije
+                    board = initialBoardBackup.copy()
+                    checkGameStatus(board)
+                    puzzleCompleted = false
+                    noMoreMoves = false
+                    timeElapsedSeconds = 0
+                    gameStarted = true
                     Toast.makeText(context, "Tabla resetovana i vreme resetovano!", Toast.LENGTH_SHORT).show()
                 },
-                modifier = Modifier.weight(1f).padding(end = 4.dp) // Manji razmak
+                modifier = Modifier.weight(1f).padding(end = 4.dp)
             ) {
                 Text("Resetuj poziciju")
             }
             Button(
                 onClick = {
-                    selectedSquare = null // Poništi selekciju
-                    generateNewPuzzle() // Generiši novu zagonetku i resetuj tajmer
+                    selectedSquare = null
+                    highlightedSquares = emptySet() // Resetuj obeležavanja kod nove zagonetke
+                    generateNewPuzzle()
                 },
-                modifier = Modifier.weight(1f).padding(start = 4.dp) // Manji razmak
+                modifier = Modifier.weight(1f).padding(start = 4.dp)
             ) {
                 Text("Nova Zagonetka")
             }
         }
     }
 }
-
 
 fun performMove(
     fromSquare: Square,
@@ -500,13 +448,12 @@ fun performMove(
 @Composable
 fun DefaultPreview() {
     ChessPuzzleTheme {
-        // U preview-u, moramo da simuliramo prosleđivanje imena igrača
         ChessGameScreen(
             difficulty = "Srednje",
             selectedFigures = listOf(PieceType.QUEEN, PieceType.KNIGHT),
             minMoves = 3,
             maxMoves = 6,
-            playerName = "Preview Igrač" // Simulirano ime za preview
+            playerName = "Preview Igrač"
         )
     }
 }

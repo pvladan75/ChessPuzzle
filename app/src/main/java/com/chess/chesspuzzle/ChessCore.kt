@@ -2,9 +2,118 @@ package com.chess.chesspuzzle
 
 import android.util.Log
 
+// UVEZI sve definicije iz ChessDefinitions.kt
+// Ovo je ključno da bi ChessCore.kt mogao da koristi PieceType, Square, Piece, ChessBoard
+// bez ponovnog definisanja.
+import com.chess.chesspuzzle.*
+
 object ChessCore {
 
     private const val TAG = "ChessCore"
+
+    /**
+     * Parsira FEN string i kreira ChessBoard objekat.
+     * Trenutno podržava samo deo FEN-a koji se odnosi na poziciju figura.
+     *
+     * @param fenString FEN string za parsiranje (npr. "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+     * @return ChessBoard objekat sa postavljenim figurama.
+     */
+    fun parseFenToBoard(fenString: String): ChessBoard {
+        var board = ChessBoard.createEmpty() // Započni sa praznom tablom
+        val parts = fenString.split(" ")
+        val piecePlacement = parts[0] // Prvi deo FEN-a je pozicija figura
+
+        var rank = 8 // Počinjemo od 8. reda (top)
+        var file = 'a' // Počinjemo od 'a' fajla
+
+        for (char in piecePlacement) {
+            when {
+                char == '/' -> {
+                    rank-- // Prelazimo na sledeći red
+                    file = 'a' // Resetujemo fajl na 'a'
+                }
+                char.isDigit() -> {
+                    // Prazna polja, preskoči broj polja
+                    file += char.toString().toInt()
+                }
+                else -> {
+                    // Figura
+                    val pieceType = when (char.lowercaseChar()) {
+                        'p' -> PieceType.PAWN
+                        'n' -> PieceType.KNIGHT
+                        'b' -> PieceType.BISHOP
+                        'r' -> PieceType.ROOK
+                        'q' -> PieceType.QUEEN
+                        'k' -> PieceType.KING
+                        else -> PieceType.NONE // Nepoznat karakter
+                    }
+                    val pieceColor = if (char.isUpperCase()) PieceColor.WHITE else PieceColor.BLACK
+                    if (pieceType != PieceType.NONE) {
+                        board = board.setPiece(Square(file, rank), Piece(pieceType, pieceColor))
+                    }
+                    file++ // Prelazimo na sledeći fajl
+                }
+            }
+        }
+        return board
+    }
+
+    /**
+     * Konvertuje ChessBoard objekat u FEN string.
+     * Za sada, fokusira se samo na deo pozicije figura.
+     * (Potpuni FEN uključuje i active color, castling rights, en passant, halfmove clock, fullmove number)
+     */
+    fun convertBoardToFen(board: ChessBoard): String {
+        val fenBuilder = StringBuilder()
+        for (rank in 8 downTo 1) { // Iteriraj od 8. do 1. reda
+            var emptySquares = 0
+            for (fileChar in 'a'..'h') { // Iteriraj od 'a' do 'h' fajla
+                val square = Square(fileChar, rank)
+                val piece = board.getPiece(square)
+
+                if (piece.type == PieceType.NONE) {
+                    emptySquares++ // Broji prazna polja
+                } else {
+                    if (emptySquares > 0) {
+                        fenBuilder.append(emptySquares) // Dodaj broj praznih polja
+                        emptySquares = 0
+                    }
+                    // Dodaj karakter figure (veliko slovo za bele, malo za crne)
+                    fenBuilder.append(when (piece.color) {
+                        PieceColor.WHITE -> when (piece.type) {
+                            PieceType.PAWN -> 'P'
+                            PieceType.KNIGHT -> 'N'
+                            PieceType.BISHOP -> 'B'
+                            PieceType.ROOK -> 'R'
+                            PieceType.QUEEN -> 'Q'
+                            PieceType.KING -> 'K'
+                            else -> ' ' // Nikad se ne bi trebalo desiti
+                        }
+                        PieceColor.BLACK -> when (piece.type) {
+                            PieceType.PAWN -> 'p'
+                            PieceType.KNIGHT -> 'n'
+                            PieceType.BISHOP -> 'b'
+                            PieceType.ROOK -> 'r'
+                            PieceType.QUEEN -> 'q'
+                            PieceType.KING -> 'k'
+                            else -> ' ' // Nikad se ne bi trebalo desiti
+                        }
+                        else -> ' ' // Nikad se ne bi trebalo desiti za PieceColor.NONE
+                    })
+                }
+            }
+            if (emptySquares > 0) {
+                fenBuilder.append(emptySquares) // Dodaj preostali broj praznih polja za red
+            }
+            if (rank > 1) {
+                fenBuilder.append('/') // Odvoji redove sa '/'
+            }
+        }
+        // Dodatni FEN delovi (za sada fiksni, kasnije možeš proširiti)
+        fenBuilder.append(" w - - 0 1")
+        return fenBuilder.toString()
+    }
+
 
     /**
      * Vraća listu svih legalnih polja na koja se data figura može pomeriti
