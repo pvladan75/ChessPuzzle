@@ -33,13 +33,17 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign // Dodato za centriranje teksta
 
+// Glavna aktivnost aplikacije
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d("MainActivity", "Initializing SoundPool from MainActivity onCreate...")
-        PuzzleGenerator.initializeSoundPool(applicationContext) // Inicijalizuj SoundPool
-        ScoreManager.init(applicationContext) // Inicijalizacija ScoreManagera sa kontekstom aplikacije
+        // Inicijalizuj SoundPool i ScoreManager JEDNOM kada se aplikacija pokrene
+        // applicationContext je siguran za globalnu inicijalizaciju
+        PuzzleGenerator.initializeSoundPool(applicationContext)
+        ScoreManager.init(applicationContext)
 
         setContent {
             ChessPuzzleTheme {
@@ -59,10 +63,12 @@ class MainActivity : ComponentActivity() {
                             onNameEntered = { name ->
                                 playerName = name
                                 showNameInputDialog = false // Sakrij dijalog nakon unosa imena
+                                Log.d("MainActivity", "Player name entered: $playerName")
                             },
                             onDismiss = {
                                 playerName = "Anonimni" // Koristi default ako se dijalog odbije
                                 showNameInputDialog = false // Sakrij dijalog
+                                Log.d("MainActivity", "Player name dialog dismissed. Using default: $playerName")
                             }
                         )
                     } else {
@@ -78,22 +84,30 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d("MainActivity", "Releasing SoundPool from MainActivity onDestroy...")
-        PuzzleGenerator.releaseSoundPool() // Oslobodi SoundPool resurse
+        // Oslobodi SoundPool resurse kada se aktivnost uništi
+        PuzzleGenerator.releaseSoundPool()
     }
 }
 
 // Glavni meni aplikacije - sada prima ime igrača
 @Composable
-fun MainMenu(playerName: String) { // Dodat playerName kao parametar
+fun MainMenu(playerName: String) { // playerName je sada obavezan parametar
     val context = LocalContext.current
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         // Prikaz imena igrača na glavnom meniju
-        Text(text = "Dobrodošli, $playerName!", style = MaterialTheme.typography.headlineLarge)
-        // Razmak
+        Text(
+            text = "Dobrodošli, $playerName!",
+            style = MaterialTheme.typography.headlineLarge,
+            textAlign = TextAlign.Center, // Centriraj tekst
+            modifier = Modifier.padding(bottom = 32.dp) // Dodaj malo razmaka ispod imena
+        )
+
         Column(modifier = Modifier.padding(vertical = 16.dp)) {
             Button(
                 onClick = {
@@ -102,20 +116,26 @@ fun MainMenu(playerName: String) { // Dodat playerName kao parametar
                     intent.putExtra("playerName", playerName)
                     context.startActivity(intent)
                 },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
             ) {
                 Text("Modul 1: Uništi sve figure protivnika")
             }
             Button(
                 onClick = { /* Implementiraj logiku za Modul 2 */ },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
                 enabled = false // Onemogućeno dok se ne implementira
             ) {
                 Text("Modul 2: Pomoć pri učenju")
             }
             Button(
                 onClick = { /* Implementiraj logiku za Modul 3 */ },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
                 enabled = false // Onemogućeno dok se ne implementira
             ) {
                 Text("Modul 3: Rešavanje zagonetki (Kompleksnije)")
@@ -128,7 +148,9 @@ fun MainMenu(playerName: String) { // Dodat playerName kao parametar
                     // intent.putExtra("playerName", playerName)
                     context.startActivity(intent)
                 },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
             ) {
                 Text("Najbolji Rezultati")
             }
@@ -139,7 +161,9 @@ fun MainMenu(playerName: String) { // Dodat playerName kao parametar
                     val intent = Intent(context, SolutionDisplayActivity::class.java)
                     context.startActivity(intent)
                 },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
             ) {
                 Text("Prikaži Rešenja Zagonetki (TEST)")
             }
@@ -192,7 +216,6 @@ fun PlayerNameInputDialog(onNameEntered: (String) -> Unit, onDismiss: () -> Unit
         }
     )
 }
-
 
 // Preview za MainActivity
 @Preview(showBackground = true)

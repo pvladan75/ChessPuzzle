@@ -17,18 +17,20 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
 
-// UVEZITE sve definicije iz novog fajla ChessDefinitions.kt
-import com.chess.chesspuzzle.PieceType // Konkretan import umesto zvezdice, za bolju praksu
+// Koristimo Kotlin enum za težinu radi bolje prakse
+enum class Difficulty { EASY, MEDIUM, HARD }
 
 class FigureSelectionActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,35 +51,37 @@ class FigureSelectionActivity : ComponentActivity() {
 }
 
 @Composable
-fun FigureSelectionScreen(playerName: String) { // FigureSelectionScreen sada prima playerName
+fun FigureSelectionScreen(playerName: String) {
     val context = LocalContext.current
-    var selectedDifficulty by remember { mutableStateOf("Lako") }
-    // Vraćeno na mutableStateListOf<PieceType>() da se figure resetuju pri promeni težine
+    var selectedDifficulty by remember { mutableStateOf(Difficulty.EASY) }
     val selectedFigures = remember { mutableStateListOf<PieceType>() }
 
-    // Mapa koja definiše koliko figura je potrebno za svaki nivo
-    val requiredFigures = remember { // Dodato remember radi optimizacije
+    // NOVO: Stanje za odabir moda (Trening ili Takmičarski)
+    var isTrainingMode by remember { mutableStateOf(true) } // Podrazumevano Trening Mod
+
+    // Mape koje definišu potrebne parametre po nivou težine
+    val requiredFigures = remember {
         mapOf(
-            "Lako" to (1 to 2), // Lako: min 1, max 2 bele figure
-            "Srednje" to (2 to 2), // Srednje: tačno 2 bele figure
-            "Teško" to (2 to 3)    // Teško: min 2, max 3 bele figure
+            Difficulty.EASY to (1 to 2), // Lako: min 1, max 2 bele figure
+            Difficulty.MEDIUM to (2 to 2), // Srednje: tačno 2 bele figure
+            Difficulty.HARD to (2 to 3)    // Teško: min 2, max 3 bele figure
         )
     }
 
-    // Mapa koja definiše opseg broja POTEZA (crnih figura).
-    // Za Teško, ovo sada predstavlja UKUPAN broj pešaka na tabli.
-    val numberOfMovesRange = remember { // Dodato remember radi optimizacije
+    // Mapa koja definiše opseg broja CRNIH PEŠAKA (pawns) na tabli.
+    val numberOfPawnsRange = remember {
         mapOf(
-            "Lako" to (5 to 6),  // Lako: 5-6 crnih figura
-            "Srednje" to (3 to 4), // Srednje: 3-4 crne figure
-            "Teško" to (12 to 13) // Teško: 12-13 crnih figura (UKUPNO)
+            Difficulty.EASY to (3 to 5),  // Lako: 3-5 crnih pešaka
+            Difficulty.MEDIUM to (6 to 9), // Srednje: 6-9 crnih pešaka
+            Difficulty.HARD to (10 to 14) // Teško: 10-14 crnih pešaka (UKUPNO)
         )
     }
 
-    val currentRequiredMin = requiredFigures[selectedDifficulty]?.first ?: 1
-    val currentRequiredMax = requiredFigures[selectedDifficulty]?.second ?: 1
-    val currentMovesMin = numberOfMovesRange[selectedDifficulty]?.first ?: 1
-    val currentMovesMax = numberOfMovesRange[selectedDifficulty]?.second ?: 1
+    val currentRequiredMinWhiteFigures = requiredFigures[selectedDifficulty]?.first ?: 1
+    val currentRequiredMaxWhiteFigures = requiredFigures[selectedDifficulty]?.second ?: 1
+    val currentMinBlackPawns = numberOfPawnsRange[selectedDifficulty]?.first ?: 1
+    val currentMaxBlackPawns = numberOfPawnsRange[selectedDifficulty]?.second ?: 1
+
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -88,17 +92,53 @@ fun FigureSelectionScreen(playerName: String) { // FigureSelectionScreen sada pr
         Text("Ime igrača: $playerName", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(16.dp))
 
+        // --- NOVO: Odabir moda (Trening / Takmičarski) ---
+        Text("Odaberite mod igre:", style = MaterialTheme.typography.titleLarge)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.SpaceAround) {
+            // Trening Mod RadioButton
+            Row(
+                Modifier
+                    .selectable(
+                        selected = isTrainingMode,
+                        onClick = { isTrainingMode = true },
+                        role = Role.RadioButton
+                    )
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(selected = isTrainingMode, onClick = null) // onClick = null jer se klik detektuje na celom redu
+                Text(text = "Trening")
+            }
+
+            // Takmičarski Mod RadioButton
+            Row(
+                Modifier
+                    .selectable(
+                        selected = !isTrainingMode,
+                        onClick = { isTrainingMode = false },
+                        role = Role.RadioButton
+                    )
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(selected = !isTrainingMode, onClick = null) // onClick = null
+                Text(text = "Takmičarski")
+            }
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+
         Text("Odaberite težinu:", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(modifier = Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.SpaceAround) {
-            listOf("Lako", "Srednje", "Teško").forEach { text ->
+            listOf(Difficulty.EASY, Difficulty.MEDIUM, Difficulty.HARD).forEach { difficulty ->
                 Row(
                     Modifier
                         .selectable(
-                            selected = (text == selectedDifficulty),
+                            selected = (difficulty == selectedDifficulty),
                             onClick = {
-                                selectedDifficulty = text
+                                selectedDifficulty = difficulty
                                 // KLJUČNO: Resetuj odabrane figure pri promeni težine
                                 selectedFigures.clear()
                             },
@@ -108,99 +148,122 @@ fun FigureSelectionScreen(playerName: String) { // FigureSelectionScreen sada pr
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     RadioButton(
-                        selected = (text == selectedDifficulty),
+                        selected = (difficulty == selectedDifficulty),
                         onClick = null // null click behavior for row overall select
                     )
-                    Text(text = text)
+                    Text(text = difficulty.name.capitalize())
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Text("Odaberite figure:", style = MaterialTheme.typography.titleLarge)
-        Text(
-            text = when {
-                currentRequiredMin == currentRequiredMax -> "Potrebno tačno $currentRequiredMin bele figure."
-                else -> "Potrebno od $currentRequiredMin do $currentRequiredMax bele figure."
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.Gray
-        )
-        Text(
-            text = "Biće postavljeno od $currentMovesMin do $currentMovesMax crnih figura.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.DarkGray
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+        // Prikaz odabira figura samo ako je "Trening Mod" aktivan
+        if (isTrainingMode) {
+            Text("Odaberite bele figure:", style = MaterialTheme.typography.titleLarge)
+            Text(
+                text = when {
+                    currentRequiredMinWhiteFigures == currentRequiredMaxWhiteFigures ->
+                        "Potrebno tačno $currentRequiredMinWhiteFigures bela figura/e."
+                    else -> "Potrebno od $currentRequiredMinWhiteFigures do $currentRequiredMaxWhiteFigures bele figure."
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.Gray
+            )
+            Text(
+                text = "Biće postavljeno od $currentMinBlackPawns do $currentMaxBlackPawns crnih figura.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.DarkGray
+            )
+            Spacer(modifier = Modifier.height(8.dp))
 
-        val availableFigures = listOf(PieceType.KNIGHT, PieceType.ROOK, PieceType.BISHOP, PieceType.QUEEN)
-        Column {
-            availableFigures.chunked(2).forEach { rowFigures ->
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-                    rowFigures.forEach { pieceType ->
-                        val isSelected = selectedFigures.contains(pieceType)
-                        val backgroundColor = if (isSelected) Color.Green.copy(alpha = 0.3f) else Color.Transparent
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clickable {
-                                    if (isSelected) {
-                                        selectedFigures.remove(pieceType)
-                                    } else {
-                                        // Dozvoli dodavanje do max figura za trenutnu težinu
-                                        if (selectedFigures.size < currentRequiredMax) {
-                                            selectedFigures.add(pieceType)
+            val availableFigures = listOf(PieceType.KNIGHT, PieceType.ROOK, PieceType.BISHOP, PieceType.QUEEN)
+            Column {
+                availableFigures.chunked(2).forEach { rowFigures ->
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                        rowFigures.forEach { pieceType ->
+                            val isSelected = selectedFigures.contains(pieceType)
+                            val backgroundColor = if (isSelected) Color.Green.copy(alpha = 0.3f) else Color.Transparent
+                            Box(
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clickable {
+                                        if (isSelected) {
+                                            selectedFigures.remove(pieceType)
                                         } else {
-                                            Toast.makeText(context, "Već ste odabrali maksimalan broj figura za ovaj nivo ($currentRequiredMax)!", Toast.LENGTH_SHORT).show()
+                                            // Dozvoli dodavanje do max figura za trenutnu težinu
+                                            if (selectedFigures.size < currentRequiredMaxWhiteFigures) {
+                                                selectedFigures.add(pieceType)
+                                            } else {
+                                                Toast.makeText(context, "Već ste odabrali maksimalan broj figura za ovaj nivo ($currentRequiredMaxWhiteFigures)!", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
                                     }
+                                    .background(backgroundColor)
+                                    .padding(8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val drawableResId = when (pieceType) {
+                                    PieceType.KNIGHT -> R.drawable.wn
+                                    PieceType.ROOK -> R.drawable.wr
+                                    PieceType.BISHOP -> R.drawable.wb
+                                    PieceType.QUEEN -> R.drawable.wq
+                                    else -> 0
                                 }
-                                .background(backgroundColor)
-                                .padding(8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val drawableResId = when (pieceType) {
-                                PieceType.KNIGHT -> R.drawable.wn
-                                PieceType.ROOK -> R.drawable.wr
-                                PieceType.BISHOP -> R.drawable.wb
-                                PieceType.QUEEN -> R.drawable.wq
-                                else -> 0
-                            }
-                            if (drawableResId != 0) {
-                                Image(
-                                    painter = painterResource(id = drawableResId),
-                                    contentDescription = pieceType.name,
-                                    modifier = Modifier.size(50.dp)
-                                )
+                                if (drawableResId != 0) {
+                                    Image(
+                                        painter = painterResource(id = drawableResId),
+                                        contentDescription = pieceType.name,
+                                        modifier = Modifier.size(50.dp)
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(32.dp))
+        } else {
+            // Ako je Takmičarski mod, prikaži poruku da se figure ne biraju
+            Text(
+                text = "U Takmičarskom modu figure se automatski biraju na osnovu težine.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.Gray,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            )
+            Spacer(modifier = Modifier.height(32.dp))
         }
-        Spacer(modifier = Modifier.height(32.dp))
+
 
         // Provera da li je broj selektovanih figura validan za trenutnu težinu
-        val canStartGame = selectedFigures.size in currentRequiredMin..currentRequiredMax && selectedFigures.isNotEmpty()
+        // U takmičarskom modu, uvek je validno ako je odabran mod
+        val canStartGame = if (isTrainingMode) {
+            selectedFigures.size in currentRequiredMinWhiteFigures..currentRequiredMaxWhiteFigures && selectedFigures.isNotEmpty()
+        } else {
+            true // U takmičarskom modu ne biramo figure, pa je uvek validno
+        }
 
         Button(
             onClick = {
                 if (canStartGame) {
                     val intent = Intent(context, GameActivity::class.java).apply {
-                        putExtra("difficulty", selectedDifficulty)
-                        putStringArrayListExtra("selectedFigures", ArrayList(selectedFigures.map { it.name }))
-                        // Dodaj min/max poteze u Intent
-                        putExtra("minMoves", currentMovesMin)
-                        putExtra("maxMoves", currentMovesMax)
-                        // KLJUČNO: Prosledi ime igrača u GameActivity
-                        putExtra("playerName", playerName)
+                        putExtra("difficulty", selectedDifficulty.name) // Prosleđujemo ENUM ime kao String
+                        // U zavisnosti od moda, prosleđujemo odabrane figure ili praznu listu
+                        putStringArrayListExtra(
+                            "selectedFigures",
+                            ArrayList(if (isTrainingMode) selectedFigures.map { it.name } else emptyList<String>())
+                        )
+                        putExtra("minPawns", currentMinBlackPawns) // Prosledi min broj crnih pešaka
+                        putExtra("maxPawns", currentMaxBlackPawns) // Prosledi max broj crnih pešaka
+                        putExtra("playerName", playerName) // Prosledi ime igrača
+                        putExtra("isTrainingMode", isTrainingMode) // Prosledi da li je trening mod
                     }
                     context.startActivity(intent)
                 } else {
                     val msg = when {
-                        currentRequiredMin == currentRequiredMax -> "Morate odabrati tačno $currentRequiredMin figuru/e!"
-                        else -> "Morate odabrati od $currentRequiredMin do $currentRequiredMax figura!"
+                        currentRequiredMinWhiteFigures == currentRequiredMaxWhiteFigures -> "Morate odabrati tačno $currentRequiredMinWhiteFigures figuru/e!"
+                        else -> "Morate odabrati od $currentRequiredMinWhiteFigures do $currentRequiredMaxWhiteFigures figura!"
                     }
                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                 }

@@ -2,10 +2,11 @@ package com.chess.chesspuzzle
 
 import android.util.Log
 
-// UVEZI sve definicije iz ChessDefinitions.kt
-// Ovo je ključno da bi ChessCore.kt mogao da koristi PieceType, Square, Piece, ChessBoard
-// bez ponovnog definisanja.
-import com.chess.chesspuzzle.*
+import com.chess.chesspuzzle.Piece
+import com.chess.chesspuzzle.PieceColor
+import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.Square
+import com.chess.chesspuzzle.ChessBoard
 
 object ChessCore {
 
@@ -24,37 +25,33 @@ object ChessCore {
         val piecePlacement = parts[0] // Prvi deo FEN-a je pozicija figura
 
         var rank = 8 // Počinjemo od 8. reda (top)
-        var file = 'a' // Počinjemo od 'a' fajla
+        var fileIndex = 0 // Koristimo indeks od 0 do 7 za fajlove (a=0, h=7)
 
         for (char in piecePlacement) {
             when {
                 char == '/' -> {
                     rank-- // Prelazimo na sledeći red
-                    file = 'a' // Resetujemo fajl na 'a'
+                    fileIndex = 0 // Resetujemo indeks fajla na početak
                 }
                 char.isDigit() -> {
                     // Prazna polja, preskoči broj polja
-                    file += char.toString().toInt()
+                    fileIndex += char.toString().toInt()
                 }
                 else -> {
-                    // Figura
-                    val pieceType = when (char.lowercaseChar()) {
-                        'p' -> PieceType.PAWN
-                        'n' -> PieceType.KNIGHT
-                        'b' -> PieceType.BISHOP
-                        'r' -> PieceType.ROOK
-                        'q' -> PieceType.QUEEN
-                        'k' -> PieceType.KING
-                        else -> PieceType.NONE // Nepoznat karakter
+                    // Figura: Koristi Piece.fromChar() metodu za kreiranje figure
+                    // Ona već zna kako da odredi tip i boju iz karaktera (npr. 'n' za crnog skakača)
+                    val piece = Piece.fromChar(char)
+                    if (piece.type != PieceType.NONE) {
+                        // Kreiraj Square koristeći karakter fajla i red
+                        val currentFileChar = 'a' + fileIndex // Pretvara indeks (0-7) u 'a'-'h' karakter
+                        board = board.setPiece(Square(currentFileChar, rank), piece)
                     }
-                    val pieceColor = if (char.isUpperCase()) PieceColor.WHITE else PieceColor.BLACK
-                    if (pieceType != PieceType.NONE) {
-                        board = board.setPiece(Square(file, rank), Piece(pieceType, pieceColor))
-                    }
-                    file++ // Prelazimo na sledeći fajl
+                    fileIndex++ // Prelazimo na sledeći fajl (indeks)
                 }
             }
         }
+        Log.d(TAG, "FEN Parsed. Initial board state for FEN: $fenString")
+        board.printBoard() // Loguj stanje table nakon parsiranja
         return board
     }
 
@@ -62,6 +59,8 @@ object ChessCore {
      * Konvertuje ChessBoard objekat u FEN string.
      * Za sada, fokusira se samo na deo pozicije figura.
      * (Potpuni FEN uključuje i active color, castling rights, en passant, halfmove clock, fullmove number)
+     * Ova funkcija je duplikat u odnosu na ChessBoard.toFEN() i biće uklonjena kada se prebaci na poziv board.toFEN().
+     * Ostavljena je privremeno ovde radi kompatibilnosti ako je negde van PuzzleGeneratora koristis.
      */
     fun convertBoardToFen(board: ChessBoard): String {
         val fenBuilder = StringBuilder()
@@ -110,7 +109,7 @@ object ChessCore {
             }
         }
         // Dodatni FEN delovi (za sada fiksni, kasnije možeš proširiti)
-        fenBuilder.append(" w - - 0 1")
+        fenBuilder.append(" w - - 0 1") // Dodaj aktivnu boju, prava na rokiranje itd.
         return fenBuilder.toString()
     }
 
@@ -152,7 +151,8 @@ object ChessCore {
                 val attackFiles = listOf(file - 1, file + 1)
                 for (df in attackFiles) {
                     val attackSquare = Square(df.toChar(), rank + direction)
-                    if (attackSquare.rank in 1..8 && attackSquare.file in 'a'..'h') {
+                    // Proveri da li je attackSquare validno polje pre nego što ga koristiš
+                    if (attackSquare.file in 'a'..'h' && attackSquare.rank in 1..8) {
                         val targetPiece = board.getPiece(attackSquare)
                         if (targetPiece.type != PieceType.NONE && targetPiece.color != piece.color) {
                             validMoves.add(attackSquare)
@@ -162,28 +162,27 @@ object ChessCore {
             }
             PieceType.ROOK -> {
                 // Horizontalno i vertikalno kretanje
-                for (dr in listOf(-1, 0, 1)) { // dr: -1 (dole), 0 (horizontalno), 1 (gore)
-                    for (df in listOf(-1, 0, 1)) { // df: -1 (levo), 0 (vertikalno), 1 (desno)
-                        if ((dr == 0 && df == 0) || (dr != 0 && df != 0)) continue // Preskoči dijagonalne i stajanje u mestu
+                val directions = listOf(Pair(1, 0), Pair(-1, 0), Pair(0, 1), Pair(0, -1)) // Gore, Dole, Desno, Levo
 
-                        var r = rank + dr
-                        var f = file + df
+                for ((dr, df) in directions) {
+                    var r = rank + dr
+                    var f = file + df
 
-                        while (r in 1..8 && f in 'a'..'h') {
-                            val targetSquare = Square(f, r)
-                            val targetPiece = board.getPiece(targetSquare)
+                    while (r in 1..8 && f.toChar() in 'a'..'h') { // Konvertuj f u Char pre provere
+                        val targetSquare = Square(f.toChar(), r)
+                        val targetPiece = board.getPiece(targetSquare)
 
-                            if (targetPiece.type == PieceType.NONE) {
+                        if (targetPiece.type == PieceType.NONE) {
+                            validMoves.add(targetSquare)
+                        } else {
+                            // Može da jede protivničku figuru (ne kralja, jer kralja nema)
+                            if (targetPiece.color != piece.color) {
                                 validMoves.add(targetSquare)
-                            } else {
-                                if (targetPiece.color != piece.color) { // Može da jede protivničku figuru
-                                    validMoves.add(targetSquare)
-                                }
-                                break // Zaustavi se ako naiđe na figuru (svoju ili protivničku)
                             }
-                            r += dr
-                            f += df
+                            break // Zaustavi se ako naiđe na figuru (svoju ili protivničku)
                         }
+                        r += dr
+                        f += df
                     }
                 }
             }
@@ -208,85 +207,66 @@ object ChessCore {
             }
             PieceType.BISHOP -> {
                 // Lovac - Dijagonalno kretanje
-                for (dr in listOf(-1, 1)) { // dr: -1 (dole), 1 (gore)
-                    for (df in listOf(-1, 1)) { // df: -1 (levo), 1 (desno)
-                        var r = rank + dr
-                        var f = file + df
+                val directions = listOf(Pair(1, 1), Pair(1, -1), Pair(-1, 1), Pair(-1, -1)) // Gore-desno, Gore-levo, Dole-desno, Dole-levo
 
-                        while (r in 1..8 && f in 'a'..'h') {
-                            val targetSquare = Square(f, r)
-                            val targetPiece = board.getPiece(targetSquare)
+                for ((dr, df) in directions) {
+                    var r = rank + dr
+                    var f = file + df
 
-                            if (targetPiece.type == PieceType.NONE) {
+                    while (r in 1..8 && f.toChar() in 'a'..'h') { // Konvertuj f u Char pre provere
+                        val targetSquare = Square(f.toChar(), r)
+                        val targetPiece = board.getPiece(targetSquare)
+
+                        if (targetPiece.type == PieceType.NONE) {
+                            validMoves.add(targetSquare)
+                        } else {
+                            // Može da jede protivničku figuru (ne kralja, jer kralja nema)
+                            if (targetPiece.color != piece.color) {
                                 validMoves.add(targetSquare)
-                            } else {
-                                if (targetPiece.color != piece.color) { // Može da jede protivničku figuru
-                                    validMoves.add(targetSquare)
-                                }
-                                break // Zaustavi se ako naiđe na figuru (svoju ili protivničku)
                             }
-                            r += dr
-                            f += df
+                            break // Zaustavi se ako naiđe na figuru (svoju ili protivničku)
                         }
+                        r += dr
+                        f += df
                     }
                 }
             }
             PieceType.QUEEN -> {
                 // Kraljica - Kombinacija Topa i Lovca
-                // Topovski potezi
-                for (dr in listOf(-1, 0, 1)) {
-                    for (df in listOf(-1, 0, 1)) {
-                        if ((dr == 0 && df == 0) || (dr != 0 && df != 0)) continue
+                val directions = listOf(
+                    Pair(1, 0), Pair(-1, 0), Pair(0, 1), Pair(0, -1), // Topovski
+                    Pair(1, 1), Pair(1, -1), Pair(-1, 1), Pair(-1, -1) // Lovački
+                )
 
-                        var r = rank + dr
-                        var f = file + df
+                for ((dr, df) in directions) {
+                    var r = rank + dr
+                    var f = file + df
 
-                        while (r in 1..8 && f in 'a'..'h') {
-                            val targetSquare = Square(f, r)
-                            val targetPiece = board.getPiece(targetSquare)
+                    while (r in 1..8 && f.toChar() in 'a'..'h') {
+                        val targetSquare = Square(f.toChar(), r)
+                        val targetPiece = board.getPiece(targetSquare)
 
-                            if (targetPiece.type == PieceType.NONE) {
+                        if (targetPiece.type == PieceType.NONE) {
+                            validMoves.add(targetSquare)
+                        } else {
+                            // Može da jede protivničku figuru (ne kralja, jer kralja nema)
+                            if (targetPiece.color != piece.color) {
                                 validMoves.add(targetSquare)
-                            } else {
-                                if (targetPiece.color != piece.color) {
-                                    validMoves.add(targetSquare)
-                                }
-                                break
                             }
-                            r += dr
-                            f += df
+                            break
                         }
-                    }
-                }
-                // Lovački potezi
-                for (dr in listOf(-1, 1)) {
-                    for (df in listOf(-1, 1)) {
-                        var r = rank + dr
-                        var f = file + df
-
-                        while (r in 1..8 && f in 'a'..'h') {
-                            val targetSquare = Square(f, r)
-                            val targetPiece = board.getPiece(targetSquare)
-
-                            if (targetPiece.type == PieceType.NONE) {
-                                validMoves.add(targetSquare)
-                            } else {
-                                if (targetPiece.color != piece.color) {
-                                    validMoves.add(targetSquare)
-                                }
-                                break
-                            }
-                            r += dr
-                            f += df
-                        }
+                        r += dr
+                        f += df
                     }
                 }
             }
             PieceType.KING -> {
-                // Kralj - Jedan korak u svim smerovima
+                // Ako si potpuno uklonio kraljeve iz igre, ova grana se nikada neće izvršiti.
+                // Ako ih ipak koristiš u nekom drugom kontekstu, a ne za generisanje zagonetki,
+                // onda ova logika kretanja ostaje ispravna.
                 for (dr in -1..1) {
                     for (df in -1..1) {
-                        if (dr == 0 && df == 0) continue
+                        if (dr == 0 && df == 0) continue // Ne pomera se
                         val targetRank = rank + dr
                         val targetFileChar = file.code + df
                         if (targetRank in 1..8 && targetFileChar.toChar() in 'a'..'h') {
@@ -323,6 +303,16 @@ object ChessCore {
         val fileDiff = to.file.code - from.file.code
         val rankDiff = to.rank - from.rank
 
+        // Proveri da li je potez horizontalan, vertikalan ili dijagonalan
+        val isHorizontal = rankDiff == 0 && fileDiff != 0
+        val isVertical = fileDiff == 0 && rankDiff != 0
+        val isDiagonal = kotlin.math.abs(fileDiff) == kotlin.math.abs(rankDiff) && fileDiff != 0 // Koristi kotlin.math.abs
+
+        if (!isHorizontal && !isVertical && !isDiagonal) {
+            // Nije klizni potez, nema polja između (npr. potez skakača, ili susedna polja)
+            return squaresBetween
+        }
+
         val df = if (fileDiff == 0) 0 else if (fileDiff > 0) 1 else -1 // Smer po fajlu
         val dr = if (rankDiff == 0) 0 else if (rankDiff > 0) 1 else -1 // Smer po redu
 
@@ -331,11 +321,12 @@ object ChessCore {
 
         while (true) {
             val currentSquareChar = currentFile.toChar()
-            if (currentRank !in 1..8 || currentSquareChar !in 'a'..'h') {
-                break
-            }
+            // Provera da li je trenutno polje meta ili van table
             if (currentSquareChar == to.file && currentRank == to.rank) {
-                break
+                break // Stigli smo do ciljnog polja, ne dodajemo ga u listu "između"
+            }
+            if (currentRank !in 1..8 || currentSquareChar !in 'a'..'h') {
+                break // Van table
             }
             squaresBetween.add(Square(currentSquareChar, currentRank))
             currentFile += df
@@ -358,9 +349,10 @@ object ChessCore {
     fun generatePiecePath(board: ChessBoard, piece: Piece, startSquare: Square, numMoves: Int): List<Square> {
         val path = mutableListOf<Square>()
         var currentSquare = startSquare
+        // Koristimo Set za brzo proveravanje da li je polje već posećeno
         val visitedSquaresInPath = mutableSetOf<Square>()
 
-        visitedSquaresInPath.add(startSquare)
+        visitedSquaresInPath.add(startSquare) // Početno polje se smatra posećenim
 
         Log.d(TAG, "Generisanje putanje za ${piece.type} sa ${startSquare} za ${numMoves} poteza.")
         Log.d(TAG, "Početna visitedSquaresInPath: $visitedSquaresInPath")
@@ -373,21 +365,25 @@ object ChessCore {
 
             // Filtriraj poteze koji bi se vratili na već posećeno polje unutar ove PUTANJE ZAGONETKE
             val availableMoves = possibleMoves.filter { targetSquare ->
-                var isAvailable = true
+                // Potez je nevažeći ako je ciljno polje već posećeno
                 if (visitedSquaresInPath.contains(targetSquare)) {
                     Log.d(TAG, "    Potez do $targetSquare odbijen (ZA GENERISANJE): Ciljno polje je već posećeno u putanji.")
-                    isAvailable = false
+                    false // Nije dostupno
                 } else {
+                    // Za klizne figure, proveri da li tranzitna polja kolidiraju sa posećenim
                     if (piece.type == PieceType.ROOK || piece.type == PieceType.BISHOP || piece.type == PieceType.QUEEN) {
                         val squaresBetween = getSquaresBetween(currentSquare, targetSquare)
                         val conflictsWithVisited = squaresBetween.any { visitedSquaresInPath.contains(it) }
                         if (conflictsWithVisited) {
                             Log.d(TAG, "    Potez do $targetSquare odbijen (ZA GENERISANJE): Tranzitna polja se preklapaju sa posećenim: ${squaresBetween.filter { visitedSquaresInPath.contains(it) }}")
-                            isAvailable = false
+                            false // Nije dostupno
+                        } else {
+                            true // Dostupno
                         }
+                    } else {
+                        true // Dostupno za ne-klizne figure
                     }
                 }
-                isAvailable
             }
 
             Log.d(TAG, "  Dostupni potezi nakon filtriranja (anti-vraćanje za GENERISANJE): $availableMoves")
@@ -397,9 +393,11 @@ object ChessCore {
                 return emptyList()
             }
 
+            // Nasumično odaberi sledeći potez
             val nextMove = availableMoves.random()
             path.add(nextMove)
 
+            // Ažuriraj posećena polja
             visitedSquaresInPath.add(nextMove)
             if (piece.type == PieceType.ROOK || piece.type == PieceType.BISHOP || piece.type == PieceType.QUEEN) {
                 val newVisitedBetween = getSquaresBetween(currentSquare, nextMove)
@@ -407,7 +405,7 @@ object ChessCore {
                 Log.d(TAG, "    Dodata nova tranzitna polja u visited (ZA GENERISANJE): $newVisitedBetween")
             }
 
-            currentSquare = nextMove
+            currentSquare = nextMove // Ažuriraj trenutno polje za sledeću iteraciju
             Log.d(TAG, "  Dodato u putanju: ${nextMove}. Trenutna putanja: $path")
             Log.d(TAG, "  Sva posećena polja za ovu putanju (ZA GENERISANJE): $visitedSquaresInPath")
         }
