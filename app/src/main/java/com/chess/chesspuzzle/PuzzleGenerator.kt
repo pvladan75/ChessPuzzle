@@ -4,7 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.util.Log
-import com.google.gson.Gson // Dodaj import za Gson ako već nije
+import com.google.gson.Gson
 import kotlin.random.Random
 
 object PuzzleGenerator {
@@ -16,7 +16,6 @@ object PuzzleGenerator {
     private var failureSoundId: Int = 0
     private var soundPoolLoaded: Boolean = false
 
-    // Cache za sve učitane zagonetke iz JSON fajla
     private var allLoadedPuzzles: List<ChessProblem> = emptyList()
 
     fun initializeSoundPool(context: Context) {
@@ -66,7 +65,7 @@ object PuzzleGenerator {
         if (::soundPool.isInitialized) {
             soundPool.release()
             soundPoolLoaded = false
-            allLoadedPuzzles = emptyList() // Očisti keš zagonetki pri otpuštanju
+            allLoadedPuzzles = emptyList()
             Log.d(TAG, "$TAG: SoundPool released and puzzle cache cleared.")
         }
     }
@@ -93,7 +92,6 @@ object PuzzleGenerator {
     private fun loadAllPuzzlesIfNecessary(context: Context) {
         if (allLoadedPuzzles.isEmpty()) {
             Log.d(TAG, "$TAG: Loading puzzles from puzzles.json into cache...")
-            // Pretpostavka da PuzzleLoader.kt postoji i da je dostupan
             allLoadedPuzzles = PuzzleLoader.loadPuzzlesFromJson(context, "puzzles.json")
             Log.d(TAG, "$TAG: Loaded ${allLoadedPuzzles.size} puzzles into cache.")
         } else {
@@ -103,93 +101,75 @@ object PuzzleGenerator {
 
     /**
      * Učitava zagonetku iz JSON fajla za takmičarski mod (Lako).
-     * Filtrira zagonetke po "Lako" težini, solutionLength od 5 do 7,
-     * i ukupnom broju pešaka unutar zadatog opsega.
+     * Filtrira zagonetke po "Lako" težini i solutionLength od 5 do 7.
+     * Broj pešaka je zanemaren.
      */
-    fun loadEasyPuzzleFromJson(context: Context, minPawns: Int, maxPawns: Int): ChessBoard {
+    fun loadEasyPuzzleFromJson(context: Context): ChessBoard { // Uklonjeni minPawns i maxPawns
         loadAllPuzzlesIfNecessary(context)
-        Log.d(TAG, "$TAG: Attempting to load EASY puzzle from JSON. Solution length: 5-7, Pawns: $minPawns-$maxPawns.")
+        Log.d(TAG, "$TAG: Attempting to load EASY puzzle from JSON. Solution length: 5-7. Pawns criterion removed.")
 
         val filteredPuzzles = allLoadedPuzzles.filter { puzzle ->
-            val boardFromFen = ChessCore.parseFenToBoard(puzzle.fen)
-            val whitePawns = boardFromFen.getPiecesMapFromBoard(PieceColor.WHITE).count { it.value.type == PieceType.PAWN }
-            val blackPawns = boardFromFen.getPiecesMapFromBoard(PieceColor.BLACK).count { it.value.type == PieceType.PAWN }
-            val totalPawns = whitePawns + blackPawns
-
             puzzle.difficulty.equals("Lako", ignoreCase = true) &&
-                    puzzle.solutionLength in 5..7 &&
-                    totalPawns in minPawns..maxPawns
+                    puzzle.solutionLength in 5..7
         }
 
         val randomPuzzle = filteredPuzzles.randomOrNull(Random.Default)
 
         return if (randomPuzzle != null) {
-            Log.d(TAG, "$TAG: Loaded EASY puzzle ID: ${randomPuzzle.id}, FEN: ${randomPuzzle.fen}, Sol.Len: ${randomPuzzle.solutionLength}, Total Pawns: ${ChessCore.parseFenToBoard(randomPuzzle.fen).getPiecesMapFromBoard(PieceColor.WHITE).count { it.value.type == PieceType.PAWN } + ChessCore.parseFenToBoard(randomPuzzle.fen).getPiecesMapFromBoard(PieceColor.BLACK).count { it.value.type == PieceType.PAWN }}")
+            Log.d(TAG, "$TAG: Loaded EASY puzzle ID: ${randomPuzzle.id}, FEN: ${randomPuzzle.fen}, Sol.Len: ${randomPuzzle.solutionLength}")
             ChessCore.parseFenToBoard(randomPuzzle.fen)
         } else {
-            Log.e(TAG, "$TAG: No EASY puzzles found matching criteria (solution length 5-7, pawns $minPawns-$maxPawns) in JSON. Returning empty board.")
+            Log.e(TAG, "$TAG: No EASY puzzles found matching criteria (solution length 5-7) in JSON. Returning empty board.")
             ChessBoard.createEmpty()
         }
     }
 
     /**
      * Učitava zagonetku iz JSON fajla za takmičarski mod (Srednje).
-     * Filtrira zagonetke po "Srednje" težini, solutionLength od 8 do 10,
-     * i ukupnom broju pešaka unutar zadatog opsega.
+     * Filtrira zagonetke po "Srednje" težini i solutionLength od 8 do 10.
+     * Broj pešaka je zanemaren.
      */
-    fun loadMediumPuzzleFromJson(context: Context, minPawns: Int, maxPawns: Int): ChessBoard {
+    fun loadMediumPuzzleFromJson(context: Context): ChessBoard { // Uklonjeni minPawns i maxPawns
         loadAllPuzzlesIfNecessary(context)
-        Log.d(TAG, "$TAG: Attempting to load MEDIUM puzzle from JSON. Solution length: 8-10, Pawns: $minPawns-$maxPawns.")
+        Log.d(TAG, "$TAG: Attempting to load MEDIUM puzzle from JSON. Solution length: 8-10. Pawns criterion removed.")
 
         val filteredPuzzles = allLoadedPuzzles.filter { puzzle ->
-            val boardFromFen = ChessCore.parseFenToBoard(puzzle.fen)
-            val whitePawns = boardFromFen.getPiecesMapFromBoard(PieceColor.WHITE).count { it.value.type == PieceType.PAWN }
-            val blackPawns = boardFromFen.getPiecesMapFromBoard(PieceColor.BLACK).count { it.value.type == PieceType.PAWN }
-            val totalPawns = whitePawns + blackPawns
-
             puzzle.difficulty.equals("Srednje", ignoreCase = true) &&
-                    puzzle.solutionLength in 8..10 &&
-                    totalPawns in minPawns..maxPawns
+                    puzzle.solutionLength in 8..10
         }
 
         val randomPuzzle = filteredPuzzles.randomOrNull(Random.Default)
 
         return if (randomPuzzle != null) {
-            Log.d(TAG, "$TAG: Loaded MEDIUM puzzle ID: ${randomPuzzle.id}, FEN: ${randomPuzzle.fen}, Sol.Len: ${randomPuzzle.solutionLength}, Total Pawns: ${ChessCore.parseFenToBoard(randomPuzzle.fen).getPiecesMapFromBoard(PieceColor.WHITE).count { it.value.type == PieceType.PAWN } + ChessCore.parseFenToBoard(randomPuzzle.fen).getPiecesMapFromBoard(PieceColor.BLACK).count { it.value.type == PieceType.PAWN }}")
+            Log.d(TAG, "$TAG: Loaded MEDIUM puzzle ID: ${randomPuzzle.id}, FEN: ${randomPuzzle.fen}, Sol.Len: ${randomPuzzle.solutionLength}")
             ChessCore.parseFenToBoard(randomPuzzle.fen)
         } else {
-            Log.e(TAG, "$TAG: No MEDIUM puzzles found matching criteria (solution length 8-10, pawns $minPawns-$maxPawns) in JSON. Returning empty board.")
+            Log.e(TAG, "$TAG: No MEDIUM puzzles found matching criteria (solution length 8-10) in JSON. Returning empty board.")
             ChessBoard.createEmpty()
         }
     }
 
     /**
      * Učitava zagonetku iz JSON fajla za takmičarski mod (Teško).
-     * Filtrira zagonetke po "Teško" težini, solutionLength > 10,
-     * i ukupnom broju pešaka unutar zadatog opsega.
+     * Filtrira zagonetke po "Teško" težini i solutionLength > 10.
+     * Broj pešaka je zanemaren.
      */
-    fun loadHardPuzzleFromJson(context: Context, minPawns: Int, maxPawns: Int): ChessBoard {
+    fun loadHardPuzzleFromJson(context: Context): ChessBoard { // Uklonjeni minPawns i maxPawns
         loadAllPuzzlesIfNecessary(context)
-        Log.d(TAG, "$TAG: Attempting to load HARD puzzle from JSON. Solution length: >10, Pawns: $minPawns-$maxPawns.")
+        Log.d(TAG, "$TAG: Attempting to load HARD puzzle from JSON. Solution length: >10. Pawns criterion removed.")
 
         val filteredPuzzles = allLoadedPuzzles.filter { puzzle ->
-            val boardFromFen = ChessCore.parseFenToBoard(puzzle.fen)
-            val whitePawns = boardFromFen.getPiecesMapFromBoard(PieceColor.WHITE).count { it.value.type == PieceType.PAWN }
-            val blackPawns = boardFromFen.getPiecesMapFromBoard(PieceColor.BLACK).count { it.value.type == PieceType.PAWN }
-            val totalPawns = whitePawns + blackPawns
-
             puzzle.difficulty.equals("Teško", ignoreCase = true) &&
-                    puzzle.solutionLength > 10 &&
-                    totalPawns in minPawns..maxPawns
+                    puzzle.solutionLength > 10
         }
 
         val randomPuzzle = filteredPuzzles.randomOrNull(Random.Default)
 
         return if (randomPuzzle != null) {
-            Log.d(TAG, "$TAG: Loaded HARD puzzle ID: ${randomPuzzle.id}, FEN: ${randomPuzzle.fen}, Sol.Len: ${randomPuzzle.solutionLength}, Total Pawns: ${ChessCore.parseFenToBoard(randomPuzzle.fen).getPiecesMapFromBoard(PieceColor.WHITE).count { it.value.type == PieceType.PAWN } + ChessCore.parseFenToBoard(randomPuzzle.fen).getPiecesMapFromBoard(PieceColor.BLACK).count { it.value.type == PieceType.PAWN }}")
+            Log.d(TAG, "$TAG: Loaded HARD puzzle ID: ${randomPuzzle.id}, FEN: ${randomPuzzle.fen}, Sol.Len: ${randomPuzzle.solutionLength}")
             ChessCore.parseFenToBoard(randomPuzzle.fen)
         } else {
-            Log.e(TAG, "$TAG: No HARD puzzles found matching criteria (solution length >10, pawns $minPawns-$maxPawns) in JSON. Returning empty board.")
+            Log.e(TAG, "$TAG: No HARD puzzles found matching criteria (solution length >10) in JSON. Returning empty board.")
             ChessBoard.createEmpty()
         }
     }
@@ -243,7 +223,6 @@ object PuzzleGenerator {
 
                 // 2. Generiši putanju za belu figuru i prikupi ciljna polja
                 val numMovesForThisPiece = random.nextInt(minMovesPerPiece, maxMovesPerPiece + 1)
-                // OBAVEZNO: Ovde koristimo ChessCore.generatePiecePath
                 val pathSegments = ChessCore.generatePiecePath(currentBoardForSimulation, whitePiece, safeStartSquare, numMovesForThisPiece)
 
                 if (pathSegments.size != numMovesForThisPiece) {
@@ -260,7 +239,6 @@ object PuzzleGenerator {
                     // Ažuriraj allPassThroughSquares na osnovu generisane putanje
                     var currentPathPos = safeStartSquare
                     for (moveTarget in pathSegments) {
-                        // OBAVEZNO: Ovde koristimo ChessCore.getSquaresBetween
                         val passThrough = ChessCore.getSquaresBetween(currentPathPos, moveTarget)
                         if (whitePieceType != PieceType.KNIGHT) {
                             allPassThroughSquares.addAll(passThrough)
@@ -274,7 +252,7 @@ object PuzzleGenerator {
                         generationSuccessful = false
                     }
                 }
-            } // Kraj let bloka za startSquare
+            }
 
             if (!generationSuccessful) continue
 
@@ -292,7 +270,7 @@ object PuzzleGenerator {
             val availableBlackPieceTypes = mutableListOf(
                 PieceType.PAWN, PieceType.ROOK, PieceType.KNIGHT, PieceType.BISHOP, PieceType.QUEEN
             )
-            availableBlackPieceTypes.remove(PieceType.QUEEN) // Laki nivo obično nema Kraljicu kao metu
+            availableBlackPieceTypes.remove(PieceType.QUEEN)
 
             for (targetSquare in allTargetSquares) {
                 if (finalPuzzleBoard.getPiece(targetSquare).type != PieceType.NONE || initialPositions.values.contains(targetSquare)) {
@@ -316,9 +294,7 @@ object PuzzleGenerator {
             val blackPiecesCount = finalPuzzleBoard.getPiecesMapFromBoard(PieceColor.BLACK).size
             val whitePiecesCount = finalPuzzleBoard.getPiecesMapFromBoard(PieceColor.WHITE).size
 
-            // Pojednostavljena finalna provera bez kraljeva
             if (blackPiecesCount > 0 && whitePiecesCount > 0) {
-                // OBAVEZNO: Ovde menjamo ChessCore.toFEN() u finalPuzzleBoard.toFEN()
                 Log.d(TAG, "$TAG: Easy (Random): Successfully generated puzzle after $attempt attempts. FEN: ${finalPuzzleBoard.toFEN()}")
                 return finalPuzzleBoard
             }
@@ -385,7 +361,6 @@ object PuzzleGenerator {
                 val whitePiece = Piece(pieceType, PieceColor.WHITE)
 
                 val numMovesForThisPiece = random.nextInt(minMovesPerPiece, maxMovesPerPiece + 1)
-                // OBAVEZNO: Ovde koristimo ChessCore.generatePiecePath
                 val pathSegments = ChessCore.generatePiecePath(currentBoardForSimulation, whitePiece, startSquare, numMovesForThisPiece)
 
                 if (pathSegments.size != numMovesForThisPiece) {
@@ -398,7 +373,6 @@ object PuzzleGenerator {
 
                 var currentPathPos = startSquare
                 for (moveTarget in pathSegments) {
-                    // OBAVEZNO: Ovde koristimo ChessCore.getSquaresBetween
                     val passThrough = ChessCore.getSquaresBetween(currentPathPos, moveTarget)
                     if (pieceType != PieceType.KNIGHT) {
                         allPassThroughSquares.addAll(passThrough)
@@ -444,9 +418,7 @@ object PuzzleGenerator {
             val blackPiecesCount = finalPuzzleBoard.getPiecesMapFromBoard(PieceColor.BLACK).size
             val whitePiecesCount = finalPuzzleBoard.getPiecesMapFromBoard(PieceColor.WHITE).size
 
-            // Pojednostavljena finalna provera bez kraljeva
             if (blackPiecesCount > 0 && whitePiecesCount > 0) {
-                // OBAVEZNO: Ovde menjamo ChessCore.toFEN() u finalPuzzleBoard.toFEN()
                 Log.d(TAG, "$TAG: Medium (Random): Successfully generated puzzle after $attempt attempts. FEN: ${finalPuzzleBoard.toFEN()}")
                 return finalPuzzleBoard
             }
@@ -468,7 +440,7 @@ object PuzzleGenerator {
 
         val numWhitePieces = Random.nextInt(2, 4)
         val figuresToUse = if (selectedFigures.size < numWhitePieces) {
-            val defaultPowerful = mutableListOf(PieceType.QUEEN, PieceType.ROOK, PieceType.BISHOP, PieceType.KNIGHT).shuffled(Random.Default) // Corrected BISHop to BISHOP
+            val defaultPowerful = mutableListOf(PieceType.QUEEN, PieceType.ROOK, PieceType.BISHOP, PieceType.KNIGHT).shuffled(Random.Default)
             (selectedFigures + defaultPowerful).distinct().take(numWhitePieces)
         } else {
             selectedFigures.shuffled(Random.Default).take(numWhitePieces)
@@ -514,7 +486,6 @@ object PuzzleGenerator {
                 val whitePiece = Piece(pieceType, PieceColor.WHITE)
 
                 val numMovesForThisPiece = random.nextInt(minMovesPerPiece, maxMovesPerPiece + 1)
-                // OBAVEZNO: Ovde koristimo ChessCore.generatePiecePath
                 val pathSegments = ChessCore.generatePiecePath(currentBoardForSimulation, whitePiece, startSquare, numMovesForThisPiece)
 
                 if (pathSegments.size != numMovesForThisPiece) {
@@ -527,7 +498,6 @@ object PuzzleGenerator {
 
                 var currentPathPos = startSquare
                 for (moveTarget in pathSegments) {
-                    // OBAVEZNO: Ovde koristimo ChessCore.getSquaresBetween
                     val passThrough = ChessCore.getSquaresBetween(currentPathPos, moveTarget)
                     if (pieceType != PieceType.KNIGHT) {
                         allPassThroughSquares.addAll(passThrough)
@@ -573,9 +543,7 @@ object PuzzleGenerator {
             val blackPiecesCount = finalPuzzleBoard.getPiecesMapFromBoard(PieceColor.BLACK).size
             val whitePiecesCount = finalPuzzleBoard.getPiecesMapFromBoard(PieceColor.WHITE).size
 
-            // Pojednostavljena finalna provera bez kraljeva
             if (blackPiecesCount > 0 && whitePiecesCount > 0) {
-                // OBAVEZNO: Ovde menjamo ChessCore.toFEN() u finalPuzzleBoard.toFEN()
                 Log.d(TAG, "$TAG: Hard (Random): Successfully generated puzzle after $attempt attempts. FEN: ${finalPuzzleBoard.toFEN()}")
                 return finalPuzzleBoard
             }
@@ -584,17 +552,12 @@ object PuzzleGenerator {
         return ChessBoard.createEmpty()
     }
 
-    /**
-     * Pronalazi nasumično prazno polje na tabli koje nije na listi već zauzetih polja.
-     * Logika za kraljeve je uklonjena.
-     */
     private fun findRandomEmptySquare(board: ChessBoard, existingOccupiedSquares: Set<Square>, intendedPieceColor: PieceColor? = null): Square? {
         val emptySquares = mutableListOf<Square>()
         for (rank in 1..8) {
             for (fileChar in 'a'..'h') {
                 val square = Square(fileChar, rank)
                 if (board.getPiece(square).type == PieceType.NONE && !existingOccupiedSquares.contains(square)) {
-                    // Nema specifičnih ograničenja za kraljeve
                     emptySquares.add(square)
                 }
             }
@@ -602,48 +565,4 @@ object PuzzleGenerator {
         return emptySquares.randomOrNull(Random.Default)
     }
 
-    /*
-     * PAŽNJA: Ova funkcija je premeštena u ChessCore.kt!
-     * Trebalo bi da je obrišete ili držite zakomentarisanu da ne bi došlo do zabune.
-     * Logika za generisanje putanje se sada poziva preko ChessCore.generatePiecePath(...)
-     */
-    /*
-    private fun generatePiecePath(
-        board: ChessBoard,
-        piece: Piece,
-        startSquare: Square,
-        length: Int,
-        currentPath: MutableList<Square> = mutableListOf()
-    ): List<Square> {
-        if (length == 0) {
-            return currentPath.toList()
-        }
-
-        val lastSquareInPath = if (currentPath.isEmpty()) startSquare else currentPath.last()
-
-        val validMoves = ChessCore.getValidMoves(board, piece, lastSquareInPath)
-            .filter { move ->
-                if (board.getPiece(move).color == PieceColor.WHITE) return@filter false
-                if (piece.type != PieceType.KNIGHT) {
-                    val squaresBetween = ChessCore.getSquaresBetween(lastSquareInPath, move)
-                    if (squaresBetween.any { sq -> board.getPiece(sq).type != PieceType.NONE && sq != startSquare && !currentPath.contains(sq) }) {
-                        return@filter false
-                    }
-                }
-                !currentPath.contains(move) && move != startSquare
-            }
-
-        val shuffledMoves = validMoves.shuffled(Random.Default)
-
-        for (move in shuffledMoves) {
-            val nextPath = currentPath.toMutableList()
-            nextPath.add(move)
-            val result = generatePiecePath(board, piece, startSquare, length - 1, nextPath)
-            if (result.size == length) {
-                return result
-            }
-        }
-        return emptyList()
-    }
-    */
 }

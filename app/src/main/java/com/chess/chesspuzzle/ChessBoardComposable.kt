@@ -79,6 +79,7 @@ fun ChessBoardComposable(
                         if (piece.type != PieceType.NONE) {
                             val drawableResId = when (Pair(piece.type, piece.color)) {
                                 Pair(PieceType.KNIGHT, PieceColor.WHITE) -> R.drawable.wn
+                                Pair(PieceType.KNIGHT, PieceColor.BLACK) -> R.drawable.bn // <--- OSIGURAJ SE DA NEMA ZVEZDICA OVDE
                                 Pair(PieceType.PAWN, PieceColor.BLACK) -> R.drawable.bp
                                 Pair(PieceType.ROOK, PieceColor.WHITE) -> R.drawable.wr
                                 Pair(PieceType.ROOK, PieceColor.BLACK) -> R.drawable.br
