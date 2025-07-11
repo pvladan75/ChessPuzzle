@@ -46,6 +46,12 @@
         <activity
             android:name=".SolutionDisplayActivity"
             android:exported="false" />
+        <activity
+            android:name=".PositionCreationActivity"
+            android:exported="false" android:label="Kreiranje pozicije"
+            android:theme="@style/Theme.ChessPuzzle"
+            >
+        </activity>
     </application>
 
 </manifest>

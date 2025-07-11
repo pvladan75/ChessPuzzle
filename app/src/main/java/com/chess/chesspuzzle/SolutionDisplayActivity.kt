@@ -116,7 +116,7 @@ fun SolutionScreen(puzzles: List<ChessProblem>) {
                 if (pieceAtTarget.type != PieceType.NONE && pieceAtTarget.color != pieceToMove.color) {
                     newBoard = newBoard.removePiece(to)
                 }
-                newBoard = newBoard.setPiece(to, pieceToMove)
+                newBoard = newBoard.setPiece(pieceToMove, to)
                 board = newBoard
                 highlightedSquares = setOf(from, to)
             } else {

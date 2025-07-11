@@ -56,7 +56,7 @@ object TrainingPuzzleManager {
                 continue
             }
 
-            finalPuzzleBoard = finalPuzzleBoard.setPiece(startSquare, whitePiece)
+            finalPuzzleBoard = finalPuzzleBoard.setPiece(whitePiece,startSquare)
             occupiedSquares.add(startSquare)
             initialPositions[whitePieceType] = startSquare
             Log.d(TAG, "Attempt $attempt: White piece ${whitePiece.type} placed at $startSquare. occupiedSquares: $occupiedSquares")
@@ -128,7 +128,7 @@ object TrainingPuzzleManager {
                     break
                 }
                 val blackPieceType = availableBlackPieceTypes.random(random)
-                finalPuzzleBoard = finalPuzzleBoard.setPiece(targetSquare, Piece(blackPieceType, PieceColor.BLACK))
+                finalPuzzleBoard = finalPuzzleBoard.setPiece(Piece(blackPieceType, PieceColor.BLACK), targetSquare)
                 occupiedSquares.add(targetSquare)
                 Log.d(TAG, "Attempt $attempt: Black piece ${blackPieceType} placed at $targetSquare. occupiedSquares: $occupiedSquares")
             }
@@ -207,7 +207,7 @@ object TrainingPuzzleManager {
                     break
                 }
 
-                finalPuzzleBoard = finalPuzzleBoard.setPiece(startSquare, whitePiece)
+                finalPuzzleBoard = finalPuzzleBoard.setPiece(whitePiece, startSquare)
                 occupiedSquares.add(startSquare)
                 initialPositions[pieceType] = startSquare
                 Log.d(TAG, "Attempt $attempt: White piece ${whitePiece.type} placed at $startSquare. occupiedSquares: $occupiedSquares")
@@ -285,7 +285,7 @@ object TrainingPuzzleManager {
                     break
                 }
                 val blackPieceType = availableBlackPieceTypes.random(random)
-                finalPuzzleBoard = finalPuzzleBoard.setPiece(targetSquare, Piece(blackPieceType, PieceColor.BLACK))
+                finalPuzzleBoard = finalPuzzleBoard.setPiece( Piece(blackPieceType, PieceColor.BLACK), targetSquare)
                 occupiedSquares.add(targetSquare)
                 Log.d(TAG, "Attempt $attempt: Black piece ${blackPieceType} placed at $targetSquare. occupiedSquares: $occupiedSquares")
 
@@ -365,7 +365,7 @@ object TrainingPuzzleManager {
                     break
                 }
 
-                finalPuzzleBoard = finalPuzzleBoard.setPiece(startSquare, whitePiece)
+                finalPuzzleBoard = finalPuzzleBoard.setPiece(whitePiece, startSquare)
                 occupiedSquares.add(startSquare)
                 initialPositions[pieceType] = startSquare
                 Log.d(TAG, "Attempt $attempt: White piece ${whitePiece.type} placed at $startSquare. occupiedSquares: $occupiedSquares")
@@ -443,7 +443,7 @@ object TrainingPuzzleManager {
                     break
                 }
                 val blackPieceType = availableBlackPieceTypes.random(random)
-                finalPuzzleBoard = finalPuzzleBoard.setPiece(targetSquare, Piece(blackPieceType, PieceColor.BLACK))
+                finalPuzzleBoard = finalPuzzleBoard.setPiece(Piece(blackPieceType, PieceColor.BLACK), targetSquare)
                 occupiedSquares.add(targetSquare)
                 Log.d(TAG, "Attempt $attempt: Black piece ${blackPieceType} placed at $targetSquare. occupiedSquares: $occupiedSquares")
 

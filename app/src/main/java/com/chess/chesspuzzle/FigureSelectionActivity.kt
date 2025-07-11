@@ -301,10 +301,27 @@ fun FigureSelectionScreen(playerName: String) {
                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                 }
             },
-            enabled = canStartGame
+            enabled = canStartGame,
+            modifier = Modifier.fillMaxWidth() // Dugme zauzima celu širinu
         ) {
             Text("Pokreni igru")
         }
+
+        Spacer(modifier = Modifier.height(8.dp)) // Razmak između dugmadi
+
+        // --- NOVO DUGME: Kreiraj sam poziciju ---
+        Button(
+            onClick = {
+                val intent = Intent(context, PositionCreationActivity::class.java).apply {
+                    putExtra("playerName", playerName) // Prosledi ime igrača
+                }
+                context.startActivity(intent)
+            },
+            modifier = Modifier.fillMaxWidth() // Dugme zauzima celu širinu
+        ) {
+            Text("Kreiraj sam poziciju")
+        }
+        // --- KRAJ NOVOG DUGMETA ---
     }
 }
 

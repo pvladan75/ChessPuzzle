@@ -48,7 +48,7 @@ class PositionGenerator(private val solver: ChessSolver) {
 
             // Počinjemo sa praznom tablom i postavljamo samo belu figuru.
             // Crne figure će biti postavljene na osnovu generisane putanje.
-            var currentBoard = ChessBoard.createEmpty().setPiece(whitePieceStartingSquare, whitePiece)
+            var currentBoard = ChessBoard.createEmpty().setPiece(whitePiece, whitePieceStartingSquare)
 
             val blackPiecesToPlace = mutableListOf<Pair<Square, Piece>>()
 
@@ -64,7 +64,7 @@ class PositionGenerator(private val solver: ChessSolver) {
 
             // Postavljanje crnih figura na putanju
             // Temp tabla za proveru konflikata figura prilikom postavljanja
-            var tempBoardForPlacement = ChessBoard.createEmpty().setPiece(whitePieceStartingSquare, whitePiece)
+            var tempBoardForPlacement = ChessBoard.createEmpty().setPiece(whitePiece, whitePieceStartingSquare)
             var placementSuccessful = true
 
             for (i in 0 until generatedPath.size) {
@@ -88,7 +88,7 @@ class PositionGenerator(private val solver: ChessSolver) {
                     break // Prekini ovu iteraciju i pokušaj ponovo od početka
                 }
 
-                tempBoardForPlacement = tempBoardForPlacement.setPiece(targetSquare, blackPiece)
+                tempBoardForPlacement = tempBoardForPlacement.setPiece(blackPiece, targetSquare)
                 blackPiecesToPlace.add(targetSquare to blackPiece)
             }
 
@@ -103,9 +103,9 @@ class PositionGenerator(private val solver: ChessSolver) {
             }
 
             // Finalna tabla za rešavanje: Samo početna bela figura i sve generisane crne figure
-            var finalBoardForSolver = ChessBoard.createEmpty().setPiece(whitePieceStartingSquare, whitePiece)
+            var finalBoardForSolver = ChessBoard.createEmpty().setPiece(whitePiece, whitePieceStartingSquare)
             for ((sq, p) in blackPiecesToPlace) {
-                finalBoardForSolver = finalBoardForSolver.setPiece(sq, p)
+                finalBoardForSolver = finalBoardForSolver.setPiece(p, sq)
             }
 
             Log.d(TAG, "Potencijalno generisana pozicija (FEN): ${finalBoardForSolver.toFEN()}")

@@ -99,7 +99,7 @@ class ChessSolver {
 
             var nextBoard = currentBoard.removePiece(fromSquare)
             nextBoard = nextBoard.removePiece(toSquare)
-            nextBoard = nextBoard.setPiece(toSquare, currentWhitePiece)
+            nextBoard = nextBoard.setPiece(currentWhitePiece, toSquare)
 
             path.add(currentMove)
             Log.d("ChessSolver", "Pokušavam potez: $currentMove. Trenutna putanja: $path")
