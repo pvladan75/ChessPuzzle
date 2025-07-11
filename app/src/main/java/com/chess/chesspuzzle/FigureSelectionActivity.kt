@@ -42,7 +42,8 @@ class FigureSelectionActivity : ComponentActivity() {
 
         // Inicijalizujte SoundManager ovde, jer je to globalna funkcionalnost.
         // Možete ga inicijalizovati i u nekom Application klasi ako je SoundPool potreban ranije/stalno.
-        SoundManager.initializeSoundPool(applicationContext)
+        // PROMENJENO OVDE: Koristi SoundManager.initialize()
+        SoundManager.initialize(applicationContext)
 
         setContent {
             ChessPuzzleTheme {
@@ -57,7 +58,8 @@ class FigureSelectionActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         // Otpustite SoundPool resurse kada aktivnost više nije potrebna
-        SoundManager.releaseSoundPool()
+        // PROMENJENO OVDE: Koristi SoundManager.release()
+        SoundManager.release()
     }
 }
 

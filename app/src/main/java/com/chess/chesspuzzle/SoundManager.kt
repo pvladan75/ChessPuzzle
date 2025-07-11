@@ -15,7 +15,7 @@ object SoundManager {
     private var failureSoundId: Int = 0
     private var soundPoolLoaded: Boolean = false
 
-    fun initializeSoundPool(context: Context) {
+    fun initialize(context: Context) {
         if (::soundPool.isInitialized && soundPoolLoaded) {
             Log.d(TAG, "$TAG: SoundPool already initialized and sounds loaded.")
             return
@@ -56,7 +56,7 @@ object SoundManager {
         Log.d(TAG, "$TAG: SoundPool initialized. Initiating sound loading...")
     }
 
-    fun releaseSoundPool() {
+    fun release() {
         if (::soundPool.isInitialized) {
             soundPool.release()
             soundPoolLoaded = false

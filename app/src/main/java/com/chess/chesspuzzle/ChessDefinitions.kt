@@ -129,6 +129,24 @@ data class ChessBoard(val pieces: Map<Square, Piece>) {
         return ChessBoard(this.pieces.toMutableMap()) // Kopira mapu figura
     }
 
+    // NOVO: Metoda za pomeranje figure i hvatanje (integrisana u ChessBoard)
+    fun makeMoveAndCapture(from: Square, to: Square): ChessBoard {
+        val newPieces = this.pieces.toMutableMap()
+        val pieceToMove = newPieces[from] ?: return this // Ako nema figure, vrati trenutnu tablu
+
+        // Ukloni figuru sa početnog polja
+        newPieces.remove(from)
+
+        // Ukloni figuru sa ciljnog polja (ako postoji, to je "uhvaćena" figura)
+        newPieces.remove(to)
+
+        // Postavi pomerenu figuru na ciljno polje
+        newPieces[to] = pieceToMove
+
+        return ChessBoard(newPieces.toMap()) // Vrati novu instancu ChessBoard-a
+    }
+
+
     companion object {
         // Kreira praznu tablu
         fun createEmpty(): ChessBoard {

@@ -39,7 +39,8 @@ object CompetitionPuzzleLoader {
         return if (randomPuzzle != null) {
             // Accessing 'id' as Int, and 'fen', 'solutionLength' as defined in ChessProblem
             Log.d(TAG, "$TAG: Loaded EASY puzzle ID: ${randomPuzzle.id}, FEN: ${randomPuzzle.fen}, Sol.Len: ${randomPuzzle.solutionLength}")
-            ChessCore.parseFenToBoard(randomPuzzle.fen)
+            // PROMENJENO OVDE: Koristi ChessBoard.parseFenToBoard
+            ChessBoard.parseFenToBoard(randomPuzzle.fen)
         } else {
             Log.e(TAG, "$TAG: No EASY puzzles found matching criteria (solution length 5-7) in JSON. Returning empty board.")
             ChessBoard.createEmpty()
@@ -64,7 +65,8 @@ object CompetitionPuzzleLoader {
         return if (randomPuzzle != null) {
             // Accessing 'id' as Int, and 'fen', 'solutionLength' as defined in ChessProblem
             Log.d(TAG, "$TAG: Loaded MEDIUM puzzle ID: ${randomPuzzle.id}, FEN: ${randomPuzzle.fen}, Sol.Len: ${randomPuzzle.solutionLength}")
-            ChessCore.parseFenToBoard(randomPuzzle.fen)
+            // PROMENJENO OVDE: Koristi ChessBoard.parseFenToBoard
+            ChessBoard.parseFenToBoard(randomPuzzle.fen)
         } else {
             Log.e(TAG, "$TAG: No MEDIUM puzzles found matching criteria (solution length 8-10) in JSON. Returning empty board.")
             ChessBoard.createEmpty()
@@ -89,7 +91,8 @@ object CompetitionPuzzleLoader {
         return if (randomPuzzle != null) {
             // Accessing 'id' as Int, and 'fen', 'solutionLength' as defined in ChessProblem
             Log.d(TAG, "$TAG: Loaded HARD puzzle ID: ${randomPuzzle.id}, FEN: ${randomPuzzle.fen}, Sol.Len: ${randomPuzzle.solutionLength}")
-            ChessCore.parseFenToBoard(randomPuzzle.fen)
+            // PROMENJENO OVDE: Koristi ChessBoard.parseFenToBoard
+            ChessBoard.parseFenToBoard(randomPuzzle.fen)
         } else {
             Log.e(TAG, "$TAG: No HARD puzzles found matching criteria (solution length >10) in JSON. Returning empty board.")
             ChessBoard.createEmpty()

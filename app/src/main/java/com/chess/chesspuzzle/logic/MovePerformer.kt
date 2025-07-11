@@ -1,10 +1,8 @@
-// logic/MovePerformer.kt
 package com.chess.chesspuzzle.logic
 
 import android.util.Log
 import com.chess.chesspuzzle.ChessBoard
-import com.chess.chesspuzzle.ChessCore
-import com.chess.chesspuzzle.ChessSolver
+import com.chess.chesspuzzle.ChessSolver // Ostaje ako se ChessSolver.MoveData koristi drugde
 import com.chess.chesspuzzle.Difficulty
 import com.chess.chesspuzzle.GameStatusResult
 import com.chess.chesspuzzle.Square
@@ -22,8 +20,8 @@ suspend fun performMove(
     currentDifficulty: Difficulty,
     playerName: String,
     currentSessionScore: Int,
-    capture: Boolean = false,
-    targetSquare: Square? = null,
+    capture: Boolean = false, // Ostaje ovde, mada se logika prebacuje u ChessBoard
+    targetSquare: Square? = null, // Ostaje ovde, mada se logika prebacuje u ChessBoard
     onStatusUpdate: (GameStatusResult) -> Unit
 ) = withContext(Dispatchers.Default) {
     val pieceToMove = currentBoard.getPiece(fromSquare)
@@ -31,12 +29,14 @@ suspend fun performMove(
         Log.e("MovePerformer", "Attempted to move a non-existent piece from $fromSquare")
         return@withContext
     }
-    // Koristimo simulateCaptureMove iz ChessCore
-    val newBoard = ChessCore.simulateCaptureMove(currentBoard, ChessSolver.MoveData(fromSquare, toSquare))
+
+    // IZMENJENO: Koristimo novu metodu makeMoveAndCapture iz ChessBoard klase
+    val newBoard = currentBoard.makeMoveAndCapture(fromSquare, toSquare)
 
     withContext(Dispatchers.Main) {
         updateBoardState(newBoard)
     }
+
     // Pozivamo checkGameStatusLogic iz GameMechanics
     val statusResult = checkGameStatusLogic(newBoard, currentTimeElapsed, currentDifficulty, playerName, currentSessionScore)
 

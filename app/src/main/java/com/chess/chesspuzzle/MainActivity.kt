@@ -1,3 +1,4 @@
+// MainActivity.kt - Ažurirana verzija
 package com.chess.chesspuzzle
 
 import android.content.Intent
@@ -33,22 +34,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign // Dodato za centriranje teksta
+import androidx.compose.ui.text.style.TextAlign
 
-// Glavna aktivnost aplikacije
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d("MainActivity", "Initializing SoundPool from MainActivity onCreate...")
-        // Inicijalizuj SoundPool i ScoreManager JEDNOM kada se aplikacija pokrene
-        // applicationContext je siguran za globalnu inicijalizaciju
-        PuzzleGenerator.initializeSoundPool(applicationContext)
-        ScoreManager.init(applicationContext)
 
-        // --- UKLONJENO ODAKLE: Pozivanje ChessSolver.testSolver ---
-        // Log.d("MainActivity", "Calling ChessSolver.testSolver...")
-        // ChessSolver.testSolver(applicationContext)
-        // ----------------------------------------------------
+        SoundManager.initialize(applicationContext) // <--- IZMENJENO OVDE
+        ScoreManager.init(applicationContext)
 
         setContent {
             ChessPuzzleTheme {
@@ -56,29 +50,23 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // Stanja za dijalog i ime igrača
-                    // 'true' po defaultu, što znači da će se dijalog prikazati odmah
                     var showNameInputDialog by remember { mutableStateOf(true) }
-                    // Ime igrača će biti "Anonimni" dok se ne unese
                     var playerName by remember { mutableStateOf("Anonimni") }
 
-                    // Uslovno prikazivanje dijaloga ili glavnog menija
                     if (showNameInputDialog) {
                         PlayerNameInputDialog(
                             onNameEntered = { name ->
                                 playerName = name
-                                showNameInputDialog = false // Sakrij dijalog nakon unosa imena
+                                showNameInputDialog = false
                                 Log.d("MainActivity", "Player name entered: $playerName")
                             },
                             onDismiss = {
-                                playerName = "Anonimni" // Koristi default ako se dijalog odbije
-                                showNameInputDialog = false // Sakrij dijalog
+                                playerName = "Anonimni"
+                                showNameInputDialog = false
                                 Log.d("MainActivity", "Player name dialog dismissed. Using default: $playerName")
                             }
                         )
                     } else {
-                        // Prikaz glavnog menija nakon unosa imena
-                        // Prosleđujemo 'playerName' na MainMenu Composable
                         MainMenu(playerName = playerName)
                     }
                 }
@@ -89,14 +77,17 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d("MainActivity", "Releasing SoundPool from MainActivity onDestroy...")
-        // Oslobodi SoundPool resurse kada se aktivnost uništi
-        PuzzleGenerator.releaseSoundPool()
+        // Oslobodi SoundManager resurse kada se aktivnost uništi
+        SoundManager.release() // <--- IZMENJENO OVDE
     }
 }
 
+// Ostatak MainActivity.kt fajla ostaje isti (MainMenu, PlayerNameInputDialog, Preview)
+// ... (tvoj postojeći kod za MainMenu, PlayerNameInputDialog, Preview)
+// Nastavi odavde:
 // Glavni meni aplikacije - sada prima ime igrača
 @Composable
-fun MainMenu(playerName: String) { // playerName je sada obavezan parametar
+fun MainMenu(playerName: String) {
     val context = LocalContext.current
     Column(
         modifier = Modifier
@@ -105,19 +96,17 @@ fun MainMenu(playerName: String) { // playerName je sada obavezan parametar
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Prikaz imena igrača na glavnom meniju
         Text(
             text = "Dobrodošli, $playerName!",
             style = MaterialTheme.typography.headlineLarge,
-            textAlign = TextAlign.Center, // Centriraj tekst
-            modifier = Modifier.padding(bottom = 32.dp) // Dodaj malo razmaka ispod imena
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(bottom = 32.dp)
         )
 
         Column(modifier = Modifier.padding(vertical = 16.dp)) {
             Button(
                 onClick = {
                     val intent = Intent(context, FigureSelectionActivity::class.java)
-                    // KLJUČNO: Prosledi ime igrača u FigureSelectionActivity
                     intent.putExtra("playerName", playerName)
                     context.startActivity(intent)
                 },
@@ -132,7 +121,7 @@ fun MainMenu(playerName: String) { // playerName je sada obavezan parametar
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                enabled = false // Onemogućeno dok se ne implementira
+                enabled = false
             ) {
                 Text("Modul 2: Pomoć pri učenju")
             }
@@ -141,7 +130,7 @@ fun MainMenu(playerName: String) { // playerName je sada obavezan parametar
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                enabled = false // Onemogućeno dok se ne implementira
+                enabled = false
             ) {
                 Text("Modul 3: Rešavanje zagonetki (Kompleksnije)")
             }
@@ -149,8 +138,6 @@ fun MainMenu(playerName: String) { // playerName je sada obavezan parametar
             Button(
                 onClick = {
                     val intent = Intent(context, HighScoresActivity::class.java)
-                    // Opciono: Prosledi ime igrača i u HighScoresActivity ako je potrebno
-                    // intent.putExtra("playerName", playerName)
                     context.startActivity(intent)
                 },
                 modifier = Modifier
@@ -160,7 +147,6 @@ fun MainMenu(playerName: String) { // playerName je sada obavezan parametar
                 Text("Najbolji Rezultati")
             }
 
-            // NOVO DUGME: Za pokretanje SolutionDisplayActivity
             Button(
                 onClick = {
                     val intent = Intent(context, SolutionDisplayActivity::class.java)
@@ -176,27 +162,25 @@ fun MainMenu(playerName: String) { // playerName je sada obavezan parametar
     }
 }
 
-// Funkcija za prikaz dijaloga za unos imena igrača
-// Označena sa @OptIn(ExperimentalMaterial3Api::class) jer koristi TextField unutar AlertDialog-a
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerNameInputDialog(onNameEntered: (String) -> Unit, onDismiss: () -> Unit) {
     var nameInput by remember { mutableStateOf("") }
     AlertDialog(
-        onDismissRequest = onDismiss, // Šta se dešava ako korisnik klikne van dijaloga ili pritisne back
+        onDismissRequest = onDismiss,
         title = { Text("Unesite vaše ime") },
         text = {
             TextField(
                 value = nameInput,
                 onValueChange = { nameInput = it },
                 label = { Text("Ime") },
-                singleLine = true, // Samo jedan red teksta
-                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done), // Tastatura će imati "Done" dugme
+                singleLine = true,
+                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     if (nameInput.isNotBlank()) {
-                        onNameEntered(nameInput) // Pozovi callback ako je ime uneto
+                        onNameEntered(nameInput)
                     } else {
-                        onDismiss() // Otkazi ako je prazno
+                        onDismiss()
                     }
                 })
             )
@@ -205,9 +189,9 @@ fun PlayerNameInputDialog(onNameEntered: (String) -> Unit, onDismiss: () -> Unit
             Button(
                 onClick = {
                     if (nameInput.isNotBlank()) {
-                        onNameEntered(nameInput) // Pozovi callback ako je ime uneto
+                        onNameEntered(nameInput)
                     } else {
-                        onDismiss() // Otkazi ako je prazno
+                        onDismiss()
                     }
                 }
             ) {
@@ -215,20 +199,17 @@ fun PlayerNameInputDialog(onNameEntered: (String) -> Unit, onDismiss: () -> Unit
             }
         },
         dismissButton = {
-            Button(onClick = onDismiss) { // Dugme za otkazivanje
+            Button(onClick = onDismiss) {
                 Text("Otkazi")
             }
         }
     )
 }
 
-// Preview za MainActivity
 @Preview(showBackground = true)
 @Composable
 fun MainMenuPreview() {
     ChessPuzzleTheme {
-        // U preview-u, simuliraćemo da je dijalog već zatvoren da bismo videli glavni meni
-        // i da je ime "Anonimni (Preview)"
         MainMenu(playerName = "Anonimni (Preview)")
     }
 }

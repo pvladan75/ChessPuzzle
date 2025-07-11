@@ -11,11 +11,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
 import kotlinx.coroutines.delay
@@ -23,20 +25,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
+import kotlin.random.Random
 
 // DODATI IMPORTI ZA NOVE FUNKCIJE
 import com.chess.chesspuzzle.logic.checkGameStatusLogic
 import com.chess.chesspuzzle.logic.performMove
-import com.chess.chesspuzzle.puzzle.generateNewPuzzleLogic // Assuming it's in .puzzle package
-
-// No import needed for CompetitionPuzzleLoader and TrainingPuzzleManager if they are in the same 'com.chess.chesspuzzle' package.
 
 class GameActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        SoundManager.initializeSoundPool(applicationContext)
+        Log.d("GameActivity", "Initializing SoundManager from GameActivity onCreate...")
+        SoundManager.initialize(applicationContext)
         ScoreManager.init(applicationContext)
 
         val difficultyString = intent.getStringExtra("difficulty") ?: "EASY"
@@ -87,11 +88,11 @@ class GameActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        SoundManager.releaseSoundPool()
+        Log.d("GameActivity", "Releasing SoundManager from GameActivity onDestroy...")
+        SoundManager.release()
     }
 }
 
-// Data klase su i dalje ovde ili u zasebnom fajlu, po vašem izboru
 data class GameStatusResult(
     val updatedBlackPieces: Map<Square, Piece>,
     val puzzleCompleted: Boolean,
@@ -123,6 +124,9 @@ fun ChessGameScreen(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    val chessSolver = remember { ChessSolver() }
+    val puzzleGenerator = remember { PositionGenerator(chessSolver) }
+
     var board: ChessBoard by remember { mutableStateOf(ChessBoard.createEmpty()) }
     var initialBoardBackup: ChessBoard by remember { mutableStateOf(ChessBoard.createEmpty()) }
 
@@ -133,8 +137,8 @@ fun ChessGameScreen(
 
     var timeElapsedSeconds by remember { mutableStateOf(0) }
     var gameStarted by remember { mutableStateOf(0) }
-    var solvedPuzzlesCount by remember { mutableStateOf(0) }
-    var currentSessionScore by remember { mutableStateOf(0) }
+    var solvedPuzzlesCount by rememberSaveable { mutableIntStateOf(0) }
+    var currentSessionScore by rememberSaveable { mutableIntStateOf(0) }
 
     var selectedSquare: Square? by remember { mutableStateOf(null) }
     var highlightedSquares: Set<Square> by remember { mutableStateOf(emptySet()) }
@@ -152,15 +156,17 @@ fun ChessGameScreen(
     }
 
     LaunchedEffect(Unit) {
-        loadOrGenerateInitialPuzzle(
-            coroutineScope,
-            applicationContext,
-            difficulty,
-            selectedFigures,
-            minPawns,
-            maxPawns,
-            playerName,
-            isTrainingMode,
+        generateAndLoadPuzzle(
+            puzzleGenerator = puzzleGenerator,
+            coroutineScope = coroutineScope,
+            applicationContext = applicationContext,
+            difficulty = difficulty,
+            selectedFigures = selectedFigures,
+            minPawns = minPawns,
+            maxPawns = maxPawns,
+            playerName = playerName,
+            isTrainingMode = isTrainingMode,
+            currentSessionScore = currentSessionScore,
             updateBoard = { newBoard -> board = newBoard },
             updateInitialBoardBackup = { newBoard -> initialBoardBackup = newBoard },
             updatePuzzleCompleted = { completed -> puzzleCompleted = completed },
@@ -178,7 +184,7 @@ fun ChessGameScreen(
         )
     }
 
-    Column( // <-- THIS COLUMN IS WHERE THE PROBLEM WAS LIKELY
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
@@ -254,7 +260,7 @@ fun ChessGameScreen(
                 )
             } else if (isSolutionDisplaying && solverSolutionPath != null && solverSolutionPath!!.isNotEmpty()) {
                 Text(
-                    text = "Rešenje Solvera: ${solverSolutionPath!![currentSolutionStep].uci()}...",
+                    text = "Rešenje Solvera: ${solverSolutionPath!![currentSolutionStep].fromSquare.toString()}-${solverSolutionPath!![currentSolutionStep].toSquare.toString()}...",
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.headlineSmall
                 )
@@ -273,6 +279,7 @@ fun ChessGameScreen(
             highlightedSquares = highlightedSquares,
             onSquareClick = { clickedSquare ->
                 if (puzzleCompleted || noMoreMoves || gameStarted == 0 || isSolutionDisplaying) {
+                    // Ne dozvoli interakciju ako je zagonetka rešena, nema poteza, igra nije počela ili se prikazuje rešenje
                 } else {
                     val pieceOnClickedSquare = board.getPiece(clickedSquare)
 
@@ -297,14 +304,11 @@ fun ChessGameScreen(
                             selectedSquare = null
                         } else if (pieceOnClickedSquare.color == PieceColor.WHITE && pieceOnClickedSquare.type != PieceType.NONE) {
                             selectedSquare = clickedSquare
-                            val legalMoves =
-                                ChessCore.getValidMoves(board, pieceOnClickedSquare, clickedSquare)
+                            val legalMoves = ChessCore.getValidMoves(board, pieceOnClickedSquare, clickedSquare)
                             highlightedSquares = legalMoves.toSet()
                         } else {
-                            val legalChessMovesForSelectedPiece =
-                                ChessCore.getValidMoves(board, pieceToMove, fromSquare)
-                            val isPureChessValidMove =
-                                legalChessMovesForSelectedPiece.contains(toSquare)
+                            val legalChessMovesForSelectedPiece = ChessCore.getValidMoves(board, pieceToMove, fromSquare)
+                            val isPureChessValidMove = legalChessMovesForSelectedPiece.contains(toSquare)
 
                             val pieceAtTarget = board.getPiece(toSquare)
                             val isCaptureOfBlackPiece = pieceAtTarget.type != PieceType.NONE &&
@@ -408,74 +412,32 @@ fun ChessGameScreen(
                     highlightedSquares = emptySet()
 
                     coroutineScope.launch(Dispatchers.IO) {
-                        val result = generateNewPuzzleLogic(
-                            applicationContext,
-                            difficulty,
-                            selectedFigures,
-                            minPawns,
-                            maxPawns,
-                            gameStarted == 1,
-                            playerName,
-                            currentSessionScore,
-                            puzzleCompleted,
-                            noMoreMoves,
-                            isTrainingMode
+                        generateAndLoadPuzzle(
+                            puzzleGenerator = puzzleGenerator,
+                            coroutineScope = coroutineScope,
+                            applicationContext = applicationContext,
+                            difficulty = difficulty,
+                            selectedFigures = selectedFigures,
+                            minPawns = minPawns,
+                            maxPawns = maxPawns,
+                            playerName = playerName,
+                            isTrainingMode = isTrainingMode,
+                            currentSessionScore = currentSessionScore,
+                            updateBoard = { newBoard -> board = newBoard },
+                            updateInitialBoardBackup = { newBoard -> initialBoardBackup = newBoard },
+                            updatePuzzleCompleted = { completed -> puzzleCompleted = completed },
+                            updateNoMoreMoves = { noMoves -> noMoreMoves = noMoves },
+                            updateTimeElapsedSeconds = { time -> timeElapsedSeconds = time },
+                            updateSelectedSquare = { square -> selectedSquare = square },
+                            updateHighlightedSquares = { squares -> highlightedSquares = squares },
+                            updateCurrentSessionScore = { score -> currentSessionScore = score },
+                            updateGameStarted = { started -> gameStarted = started },
+                            updateIsSolutionDisplaying = { displaying -> isSolutionDisplaying = displaying },
+                            updateSolverSolutionPath = { path -> solverSolutionPath = path },
+                            updateCurrentSolutionStep = { step -> currentSolutionStep = step },
+                            updateBlackPieces = { pieces -> blackPieces = pieces },
+                            updateSolvedPuzzlesCount = { count -> solvedPuzzlesCount = count }
                         )
-                        withContext(Dispatchers.Main) {
-                            if (result.success) {
-                                board = result.newBoard
-                                initialBoardBackup = result.newBoard.copy()
-                                puzzleCompleted = false
-                                noMoreMoves = false
-                                timeElapsedSeconds = 0
-                                selectedSquare = null
-                                highlightedSquares = emptySet()
-                                currentSessionScore = result.newSessionScore
-                                gameStarted = if (result.gameStartedAfterGeneration) 1 else 0
-
-                                val statusResult = checkGameStatusLogic(
-                                    board,
-                                    timeElapsedSeconds,
-                                    difficulty,
-                                    playerName,
-                                    currentSessionScore
-                                )
-                                blackPieces = statusResult.updatedBlackPieces
-                                puzzleCompleted = statusResult.puzzleCompleted
-                                noMoreMoves = statusResult.noMoreMoves
-                                solvedPuzzlesCount += statusResult.solvedPuzzlesCountIncrement
-                                currentSessionScore = statusResult.newSessionScore
-                                gameStarted = if (statusResult.gameStarted) 1 else 0
-
-                                Log.d("PUZZLE_BOARD_STATE", "New Puzzle FEN: ${board.toFEN()}")
-                                val blackPiecesOnBoardAfterGen =
-                                    board.getPiecesMapFromBoard(PieceColor.BLACK)
-                                Log.d(
-                                    "PUZZLE_BOARD_STATE",
-                                    "Black pieces detected on new board (count: ${blackPiecesOnBoardAfterGen.size}):"
-                                )
-                                blackPiecesOnBoardAfterGen.forEach { (square, piece) ->
-                                    Log.d(
-                                        "PUZZLE_BOARD_STATE",
-                                        "  - ${piece.color} ${piece.type} at ${square.file}${square.rank}"
-                                    )
-                                }
-
-                                if (statusResult.gameStarted && result.success) {
-                                    SoundManager.playSound(true)
-                                } else if (!statusResult.gameStarted && !statusResult.puzzleCompleted && !statusResult.noMoreMoves) {
-                                    SoundManager.playSound(false)
-                                }
-
-                            } else {
-                                Log.e(
-                                    "GameActivity",
-                                    "Nije moguće generisati/učitati zagonetku, vraćena prazna tabla. Pokušajte ponovo ili promenite postavke."
-                                )
-                                gameStarted = 0
-                                SoundManager.playSound(false)
-                            }
-                        }
                     }
                 },
                 modifier = Modifier
@@ -497,13 +459,13 @@ fun ChessGameScreen(
                         highlightedSquares = emptySet()
 
                         Log.d("GameActivity", "Pokrećem Solver za FEN: ${board.toFEN()}")
-                        val solution = ChessSolver.solveCapturePuzzle(board.toFEN())
+                        val solution = chessSolver.solve(board)
 
                         withContext(Dispatchers.Main) {
                             if (solution != null && solution.isNotEmpty()) {
                                 Log.d(
                                     "GameActivity",
-                                    "Solver pronašao rešenje: ${solution.map { it.uci() }}"
+                                    "Solver pronašao rešenje: ${solution.map { it.fromSquare.toString() + "-" + it.toSquare.toString() }}"
                                 )
                                 solverSolutionPath = solution
                                 val firstMove = solution.first()
@@ -578,12 +540,11 @@ fun ChessGameScreen(
         ) {
             Text("Nazad na Odabir Figure")
         }
-    } // <-- THIS CLOSING BRACE WAS LIKELY MISSING OR MISPLACED!
+    }
 }
 
-// Ensure the loadOrGenerateInitialPuzzle function is correctly defined outside ChessGameScreen
-// (as it is in your previous paste)
-suspend fun loadOrGenerateInitialPuzzle(
+suspend fun generateAndLoadPuzzle(
+    puzzleGenerator: PositionGenerator,
     coroutineScope: CoroutineScope,
     applicationContext: Context?,
     difficulty: Difficulty,
@@ -592,10 +553,11 @@ suspend fun loadOrGenerateInitialPuzzle(
     maxPawns: Int,
     playerName: String,
     isTrainingMode: Boolean,
+    currentSessionScore: Int,
     updateBoard: (ChessBoard) -> Unit,
     updateInitialBoardBackup: (ChessBoard) -> Unit,
     updatePuzzleCompleted: (Boolean) -> Unit,
-    updateNoMoreMoves: (Boolean) -> Unit,
+    updateNoMoreMoves: (Boolean) -> Unit, // This lambda is available
     updateTimeElapsedSeconds: (Int) -> Unit,
     updateSelectedSquare: (Square?) -> Unit,
     updateHighlightedSquares: (Set<Square>) -> Unit,
@@ -608,86 +570,97 @@ suspend fun loadOrGenerateInitialPuzzle(
     updateSolvedPuzzlesCount: (Int) -> Unit
 ) {
     withContext(Dispatchers.IO) {
-        val newPuzzleBoard: ChessBoard? = if (isTrainingMode) {
+        var newPuzzleFen: String? = null
+        if (isTrainingMode) {
             if (applicationContext == null) {
                 Log.e("GameActivity", "ApplicationContext is null for training puzzle generation!")
-                null
             } else {
-                when (difficulty) {
-                    Difficulty.EASY -> TrainingPuzzleManager.generateEasyRandomPuzzle(selectedFigures, minPawns, maxPawns)
-                    Difficulty.MEDIUM -> TrainingPuzzleManager.generateMediumRandomPuzzle(selectedFigures, minPawns, maxPawns)
-                    Difficulty.HARD -> TrainingPuzzleManager.generateHardRandomPuzzle(selectedFigures, minPawns, maxPawns)
-                }
+                val whitePieceType = selectedFigures.randomOrNull() ?: PieceType.QUEEN
+                val numberOfBlackPieces = Random.nextInt(minPawns, maxPawns + 1)
+
+                Log.d("generateAndLoadPuzzle", "Generišem trening zagonetku: figura: $whitePieceType, broj crnih: $numberOfBlackPieces")
+                newPuzzleFen = puzzleGenerator.generate(whitePieceType, numberOfBlackPieces)
             }
         } else {
             if (applicationContext == null) {
                 Log.e("GameActivity", "ApplicationContext je null pri učitavanju takmičarske zagonetke!")
-                null
             } else {
-                when (difficulty) {
-                    Difficulty.EASY -> CompetitionPuzzleLoader.loadEasyPuzzleFromJson(applicationContext)
-                    Difficulty.MEDIUM -> CompetitionPuzzleLoader.loadMediumPuzzleFromJson(applicationContext)
-                    Difficulty.HARD -> CompetitionPuzzleLoader.loadHardPuzzleFromJson(applicationContext)
+                Log.w("generateAndLoadPuzzle", "Takmičarski mod za sada generiše nasumičnu zagonetku jer nije implementirano učitavanje iz JSON-a unutar PositionGeneratora.")
+                val defaultWhitePieceType = when (difficulty) {
+                    Difficulty.EASY -> PieceType.KNIGHT
+                    Difficulty.MEDIUM -> PieceType.ROOK
+                    Difficulty.HARD -> PieceType.QUEEN
                 }
+                val defaultNumBlackPieces = when (difficulty) {
+                    Difficulty.EASY -> 4
+                    Difficulty.MEDIUM -> 7
+                    Difficulty.HARD -> 10
+                }
+                newPuzzleFen = puzzleGenerator.generate(defaultWhitePieceType, defaultNumBlackPieces)
             }
         }
 
         withContext(Dispatchers.Main) {
-            if (newPuzzleBoard != null && newPuzzleBoard.getPiecesMapFromBoard(PieceColor.WHITE).isNotEmpty()) {
-                updateBoard(newPuzzleBoard)
-                updateInitialBoardBackup(newPuzzleBoard.copy())
-                updatePuzzleCompleted(false)
-                updateNoMoreMoves(false)
-                updateTimeElapsedSeconds(0)
-                updateSelectedSquare(null)
-                updateHighlightedSquares(emptySet())
+            if (newPuzzleFen != null) {
+                val newPuzzleBoard = ChessBoard.parseFenToBoard(newPuzzleFen)
+                if (newPuzzleBoard.getPiecesMapFromBoard(PieceColor.WHITE).isNotEmpty()) {
+                    updateBoard(newPuzzleBoard)
+                    updateInitialBoardBackup(newPuzzleBoard.copy())
+                    updatePuzzleCompleted(false)
+                    updateNoMoreMoves(false) // This needs to be called
+                    updateTimeElapsedSeconds(0)
+                    updateSelectedSquare(null)
+                    updateHighlightedSquares(emptySet())
 
-                updateCurrentSessionScore(0)
-                val initialSessionScoreForCheck = 0
+                    updateGameStarted(1)
 
-                updateGameStarted(1)
+                    updateIsSolutionDisplaying(false)
+                    updateSolverSolutionPath(null)
+                    updateCurrentSolutionStep(0)
 
-                updateIsSolutionDisplaying(false)
-                updateSolverSolutionPath(null)
-                updateCurrentSolutionStep(0)
+                    val statusResult = checkGameStatusLogic(
+                        newPuzzleBoard,
+                        0,
+                        difficulty,
+                        playerName,
+                        currentSessionScore
+                    )
+                    updateBlackPieces(statusResult.updatedBlackPieces)
+                    updatePuzzleCompleted(statusResult.puzzleCompleted)
+                    updateNoMoreMoves(statusResult.noMoreMoves) // CORRECTED: Use the lambda here
+                    updateSolvedPuzzlesCount(statusResult.solvedPuzzlesCountIncrement)
+                    updateCurrentSessionScore(statusResult.newSessionScore)
+                    updateGameStarted(if (statusResult.gameStarted) 1 else 0)
 
-                val statusResult = checkGameStatusLogic(
-                    newPuzzleBoard,
-                    0,
-                    difficulty,
-                    playerName,
-                    initialSessionScoreForCheck
-                )
-                updateBlackPieces(statusResult.updatedBlackPieces)
-                updatePuzzleCompleted(statusResult.puzzleCompleted)
-                updateNoMoreMoves(statusResult.noMoreMoves)
-                updateSolvedPuzzlesCount(statusResult.solvedPuzzlesCountIncrement)
-                updateCurrentSessionScore(statusResult.newSessionScore)
-                updateGameStarted(if (statusResult.gameStarted) 1 else 0)
-
-                Log.d("PUZZLE_BOARD_STATE", "Loaded/Generated FEN: ${newPuzzleBoard.toFEN()}")
-                val blackPiecesOnBoard = newPuzzleBoard.getPiecesMapFromBoard(PieceColor.BLACK)
-                Log.d(
-                    "PUZZLE_BOARD_STATE",
-                    "Black pieces detected on board (count: ${blackPiecesOnBoard.size}):"
-                )
-                blackPiecesOnBoard.forEach { (square, piece) ->
+                    Log.d("PUZZLE_BOARD_STATE", "Loaded/Generated FEN: ${newPuzzleFen}")
+                    val blackPiecesOnBoard = newPuzzleBoard.getPiecesMapFromBoard(PieceColor.BLACK)
                     Log.d(
                         "PUZZLE_BOARD_STATE",
-                        "  - ${piece.color} ${piece.type} at ${square.file}${square.rank}"
+                        "Black pieces detected on board (count: ${blackPiecesOnBoard.size}):"
                     )
-                }
+                    blackPiecesOnBoard.forEach { (square, piece) ->
+                        Log.d(
+                            "PUZZLE_BOARD_STATE",
+                            "  - ${piece.color} ${piece.type} at ${square.file}${square.rank}"
+                        )
+                    }
 
-                if (statusResult.gameStarted) {
-                    SoundManager.playSound(true)
-                } else if (!statusResult.puzzleCompleted && !statusResult.noMoreMoves) {
+                    if (statusResult.gameStarted) {
+                        SoundManager.playSound(true)
+                    }
+
+                } else {
+                    Log.e(
+                        "GameActivity",
+                        "Nije moguće generisati/učitati zagonetku, generisana tabla nema belu figuru. Pokušajte ponovo ili promenite postavke."
+                    )
+                    updateGameStarted(0)
                     SoundManager.playSound(false)
                 }
-
             } else {
                 Log.e(
                     "GameActivity",
-                    "Nije moguće generisati/učitati zagonetku, vraćena prazna tabla. Pokušajte ponovo ili promenite postavke."
+                    "Nije moguće generisati/učitati zagonetku, FEN je null. Pokušajte ponovo ili promenite postavke."
                 )
                 updateGameStarted(0)
                 SoundManager.playSound(false)
@@ -697,6 +670,7 @@ suspend fun loadOrGenerateInitialPuzzle(
 }
 
 
+@Preview(showBackground = true)
 @Composable
 fun DefaultPreview() {
     val context = LocalContext.current
