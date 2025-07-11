@@ -45,6 +45,11 @@ class MainActivity : ComponentActivity() {
         PuzzleGenerator.initializeSoundPool(applicationContext)
         ScoreManager.init(applicationContext)
 
+        // --- UKLONJENO ODAKLE: Pozivanje ChessSolver.testSolver ---
+        // Log.d("MainActivity", "Calling ChessSolver.testSolver...")
+        // ChessSolver.testSolver(applicationContext)
+        // ----------------------------------------------------
+
         setContent {
             ChessPuzzleTheme {
                 Surface(

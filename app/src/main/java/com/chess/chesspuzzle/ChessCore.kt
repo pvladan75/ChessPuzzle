@@ -82,22 +82,22 @@ object ChessCore {
                         PieceColor.WHITE -> when (piece.type) {
                             PieceType.PAWN -> 'P'
                             PieceType.KNIGHT -> 'N'
-                            PieceType.BISHOP -> 'B'
+                            PieceType.BISHOP -> 'B' // Ispravljeno
                             PieceType.ROOK -> 'R'
                             PieceType.QUEEN -> 'Q'
                             PieceType.KING -> 'K'
-                            else -> ' ' // Nikad se ne bi trebalo desiti
+                            PieceType.NONE -> ' ' // Dodato za iscrpnost, iako se ne bi trebalo desiti
                         }
                         PieceColor.BLACK -> when (piece.type) {
                             PieceType.PAWN -> 'p'
                             PieceType.KNIGHT -> 'n'
-                            PieceType.BISHOP -> 'b'
+                            PieceType.BISHOP -> 'b' // Ispravljeno
                             PieceType.ROOK -> 'r'
                             PieceType.QUEEN -> 'q'
                             PieceType.KING -> 'k'
-                            else -> ' ' // Nikad se ne bi trebalo desiti
+                            PieceType.NONE -> ' ' // Dodato za iscrpnost, iako se ne bi trebalo desiti
                         }
-                        else -> ' ' // Nikad se ne bi trebalo desiti za PieceColor.NONE
+                        PieceColor.NONE -> ' ' // Nikad se ne bi trebalo desiti za PieceColor.NONE
                     })
                 }
             }
@@ -111,6 +111,140 @@ object ChessCore {
         // Dodatni FEN delovi (za sada fiksni, kasnije možeš proširiti)
         fenBuilder.append(" w - - 0 1") // Dodaj aktivnu boju, prava na rokiranje itd.
         return fenBuilder.toString()
+    }
+
+    /**
+     * Simulira potez na tabli bez provere legalnosti šahovskih pravila (npr. šah, rokada, en passant).
+     * Služi za specifične scenarije kao što je "hvatanje svih figura" zagonetka.
+     * Pretpostavlja da je beli na potezu.
+     *
+     * @param currentBoard Trenutna tabla.
+     * @param move Potez koji se simulira.
+     * @return Nova ChessBoard instanca nakon simulacije poteza.
+     */
+    fun simulateCaptureMove(currentBoard: ChessBoard, move: ChessSolver.MoveData): ChessBoard {
+        // Kreiramo duboku kopiju table da ne bismo menjali originalnu
+        val newBoard = currentBoard.copy() // Pretpostavka da ChessBoard ima copy() metodu
+
+        val pieceToMove = newBoard.getPiece(move.fromSquare) // Figura koju pomeramo
+
+        // Uklanjamo figuru sa ciljnog polja (ako postoji, to je "hvatanje")
+        // Ovo pokriva i slučaj kada je targetSquare prazno
+        newBoard.removePiece(move.toSquare)
+
+        // Uklanjamo figuru sa početnog polja
+        newBoard.removePiece(move.fromSquare)
+
+        // Postavljamo figuru na ciljno polje
+        newBoard.setPiece(move.toSquare, pieceToMove)
+
+        // Pošto u ovom modu nema promene reda poteza, rokade, en passant,
+        // ti delovi FEN-a se ne menjaju direktno ovde.
+        // Međutim, ChessBoard objekat bi trebao interno da upravlja svojim stanjem
+        // tako da toFEN() i dalje vrati validan FEN (npr. uvek 'w - - 0 1' za ostatak).
+
+        return newBoard
+    }
+
+
+    /**
+     * Generiše SVE moguće destinacije za datu figuru sa datog početnog polja,
+     * striktno na osnovu tipa kretanja figure, bez provere da li su polja na putu blokirana
+     * drugim figurama. Ovo je specifično za potrebe solvera zagonetki gde je cilj hvatanje.
+     * Pešak generiše samo dijagonalne poteze za hvatanje u kontekstu zagonetke.
+     *
+     * @param board Trenutna šahovska tabla (koristi se samo za pristup PieceType i Square).
+     * @param startSquare Početna pozicija figure.
+     * @param piece Figura za koju se traže mogući potezi.
+     * @return Lista Square objekata koji predstavljaju sve moguće destinacije.
+     */
+    fun generateAllPossibleMovesForPiece(board: ChessBoard, startSquare: Square, piece: Piece): List<Square> {
+        val possibleMoves = mutableListOf<Square>()
+        val (file, rank) = startSquare
+
+        when (piece.type) {
+            PieceType.PAWN -> {
+                // Pešak se u ovim zagonetkama kreće samo dijagonalno za hvatanje.
+                val direction = if (piece.color == PieceColor.WHITE) 1 else -1
+
+                // Hvatanje dijagonalno levo
+                if (file > 'a' && rank + direction in 1..8) {
+                    possibleMoves.add(Square((file - 1), rank + direction))
+                }
+                // Hvatanje dijagonalno desno
+                if (file < 'h' && rank + direction in 1..8) {
+                    possibleMoves.add(Square((file + 1), rank + direction))
+                }
+            }
+            PieceType.ROOK -> {
+                // Top se kreće horizontalno i vertikalno do kraja table
+                for (i in 1..8) { // Iteriraj do kraja table u svakom smeru
+                    // Horizontalno
+                    if (file + i <= 'h') possibleMoves.add(Square(file + i, rank))
+                    if (file - i >= 'a') possibleMoves.add(Square(file - i, rank))
+                    // Vertikalno
+                    if (rank + i <= 8) possibleMoves.add(Square(file, rank + i))
+                    if (rank - i >= 1) possibleMoves.add(Square(file, rank - i))
+                }
+            }
+            PieceType.KNIGHT -> {
+                // Skakačevi L-potezi
+                val knightMoveOffsets = listOf(
+                    Pair(1, 2), Pair(1, -2), Pair(-1, 2), Pair(-1, -2),
+                    Pair(2, 1), Pair(2, -1), Pair(-2, 1), Pair(-2, -1)
+                )
+                for ((fileOffset, rankOffset) in knightMoveOffsets) {
+                    val newFile = (file.code + fileOffset).toChar()
+                    val newRank = rank + rankOffset
+                    if (newFile in 'a'..'h' && newRank in 1..8) {
+                        possibleMoves.add(Square(newFile, newRank))
+                    }
+                }
+            }
+            PieceType.BISHOP -> { // Ispravljeno
+                // Lovac se kreće dijagonalno do kraja table
+                for (i in 1..8) { // Iteriraj do kraja table u svakom smeru
+                    // Dijagonalno
+                    if (file + i <= 'h' && rank + i <= 8) possibleMoves.add(Square(file + i, rank + i))
+                    if (file + i <= 'h' && rank - i >= 1) possibleMoves.add(Square(file + i, rank - i))
+                    if (file - i >= 'a' && rank + i <= 8) possibleMoves.add(Square(file - i, rank + i))
+                    if (file - i >= 'a' && rank - i >= 1) possibleMoves.add(Square(file - i, rank - i))
+                }
+            }
+            PieceType.QUEEN -> {
+                // Dama se kreće kao top i lovac do kraja table
+                // Topovski potezi
+                for (i in 1..8) {
+                    if (file + i <= 'h') possibleMoves.add(Square(file + i, rank))
+                    if (file - i >= 'a') possibleMoves.add(Square(file - i, rank))
+                    if (rank + i <= 8) possibleMoves.add(Square(file, rank + i))
+                    if (rank - i >= 1) possibleMoves.add(Square(file, rank - i))
+                }
+                // Lovački potezi
+                for (i in 1..8) {
+                    if (file + i <= 'h' && rank + i <= 8) possibleMoves.add(Square(file + i, rank + i))
+                    if (file + i <= 'h' && rank - i >= 1) possibleMoves.add(Square(file + i, rank - i))
+                    if (file - i >= 'a' && rank + i <= 8) possibleMoves.add(Square(file - i, rank + i))
+                    if (file - i >= 'a' && rank - i >= 1) possibleMoves.add(Square(file - i, rank - i))
+                }
+            }
+            PieceType.KING -> {
+                // Kralj se kreće jedno polje u svim pravcima
+                for (fileOffset in -1..1) {
+                    for (rankOffset in -1..1) {
+                        if (fileOffset == 0 && rankOffset == 0) continue // Ne pomera se na isto polje
+                        val newFile = (file.code + fileOffset).toChar()
+                        val newRank = rank + rankOffset
+                        if (newFile in 'a'..'h' && newRank in 1..8) {
+                            possibleMoves.add(Square(newFile, newRank))
+                        }
+                    }
+                }
+            }
+            PieceType.NONE -> { /* Nema poteza za prazno polje */ }
+        }
+        // Vrati listu jedinstvenih mogućih polja
+        return possibleMoves.distinct()
     }
 
 
@@ -205,7 +339,7 @@ object ChessCore {
                     }
                 }
             }
-            PieceType.BISHOP -> {
+            PieceType.BISHOP -> { // Ispravljeno
                 // Lovac - Dijagonalno kretanje
                 val directions = listOf(Pair(1, 1), Pair(1, -1), Pair(-1, 1), Pair(-1, -1)) // Gore-desno, Gore-levo, Dole-desno, Dole-levo
 
@@ -308,8 +442,8 @@ object ChessCore {
         val isVertical = fileDiff == 0 && rankDiff != 0
         val isDiagonal = kotlin.math.abs(fileDiff) == kotlin.math.abs(rankDiff) && fileDiff != 0 // Koristi kotlin.math.abs
 
+        // Ako nije ni horizontalno, ni vertikalno, ni dijagonalno (npr. L-potez skakača), nema polja "između"
         if (!isHorizontal && !isVertical && !isDiagonal) {
-            // Nije klizni potez, nema polja između (npr. potez skakača, ili susedna polja)
             return squaresBetween
         }
 
@@ -321,18 +455,53 @@ object ChessCore {
 
         while (true) {
             val currentSquareChar = currentFile.toChar()
-            // Provera da li je trenutno polje meta ili van table
+            // Stigli smo do ciljnog polja ili van table
             if (currentSquareChar == to.file && currentRank == to.rank) {
-                break // Stigli smo do ciljnog polja, ne dodajemo ga u listu "između"
+                break
             }
             if (currentRank !in 1..8 || currentSquareChar !in 'a'..'h') {
-                break // Van table
+                break
             }
             squaresBetween.add(Square(currentSquareChar, currentRank))
             currentFile += df
             currentRank += dr
         }
         return squaresBetween
+    }
+
+    /**
+     * Proverava da li je putanja između fromSquare i toSquare čista za datu vrstu figure.
+     * Ovo je ključno za klizajuće figure (top, lovac, kraljica) jer ne mogu da preskaču.
+     * Vitezovi, kraljevi i pešaci (za hvatanje) uvek imaju "čistu putanju" u ovom kontekstu.
+     *
+     * @param board Trenutna tabla.
+     * @param fromSquare Početno polje figure.
+     * @param toSquare Krajnje polje figure.
+     * @param pieceType Tip figure (npr. PieceType.ROOK, PieceType.BISHOP, PieceType.QUEEN).
+     * @return True ako je putanja čista, False inače.
+     */
+    fun isPathClear(board: ChessBoard, fromSquare: Square, toSquare: Square, pieceType: PieceType): Boolean {
+        // Vitezovi (KNIGHT) mogu da preskaču figure, pa je njihova putanja uvek "čista"
+        if (pieceType == PieceType.KNIGHT) {
+            return true
+        }
+
+        // Kralj i Pešak se kreću samo jedno polje (ili dijagonalno za hvatanje pešaka).
+        // Ako je generateAllPossibleMovesForPiece već osigurala da su to validna ciljna polja
+        // za hvatanje, onda je putanja čista (nema "prelaza" preko drugih figura za njih).
+        if (pieceType == PieceType.KING || pieceType == PieceType.PAWN) {
+            return true
+        }
+
+        // Za klizajuće figure (ROOK, BISHOP, QUEEN) proveravamo međupolja
+        val squaresBetween = getSquaresBetween(fromSquare, toSquare)
+        for (square in squaresBetween) {
+            if (board.getPiece(square).type != PieceType.NONE) {
+                // Ako postoji figura na putanji, putanja NIJE čista
+                return false
+            }
+        }
+        return true
     }
 
     /**
