@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 
+// IZMENJENO: Funkcija sada vraća GameStatusResult i nema više onStatusUpdate callback
 suspend fun performMove(
     fromSquare: Square,
     toSquare: Square,
@@ -20,27 +21,35 @@ suspend fun performMove(
     currentDifficulty: Difficulty,
     playerName: String,
     currentSessionScore: Int,
-    capture: Boolean = false, // Ostaje ovde, mada se logika prebacuje u ChessBoard
-    targetSquare: Square? = null, // Ostaje ovde, mada se logika prebacuje u ChessBoard
-    onStatusUpdate: (GameStatusResult) -> Unit
-) = withContext(Dispatchers.Default) {
+    capture: Boolean = false,
+    targetSquare: Square? = null
+): GameStatusResult = withContext(Dispatchers.Default) { // Dodata povratna vrednost
     val pieceToMove = currentBoard.getPiece(fromSquare)
     if (pieceToMove.type == com.chess.chesspuzzle.PieceType.NONE) {
         Log.e("MovePerformer", "Attempted to move a non-existent piece from $fromSquare")
-        return@withContext
+        // U slučaju greške, vratićemo defaultni GameStatusResult ili odgovarajuću grešku
+        // Za sada, vraćamo GameStatusResult koji signalizira da se ništa nije promenilo
+        return@withContext GameStatusResult(
+            updatedBlackPieces = currentBoard.getPiecesMapFromBoard(com.chess.chesspuzzle.PieceColor.BLACK),
+            puzzleCompleted = false,
+            noMoreMoves = false,
+            solvedPuzzlesCountIncrement = 0,
+            scoreForPuzzle = 0,
+            gameStarted = true, // Pretpostavljamo da je igra i dalje u toku
+            newSessionScore = currentSessionScore
+        )
     }
 
     // IZMENJENO: Koristimo novu metodu makeMoveAndCapture iz ChessBoard klase
     val newBoard = currentBoard.makeMoveAndCapture(fromSquare, toSquare)
 
     withContext(Dispatchers.Main) {
-        updateBoardState(newBoard)
+        updateBoardState(newBoard) // Ažuriraj stanje table odmah na glavnoj niti
     }
 
     // Pozivamo checkGameStatusLogic iz GameMechanics
     val statusResult = checkGameStatusLogic(newBoard, currentTimeElapsed, currentDifficulty, playerName, currentSessionScore)
 
-    withContext(Dispatchers.Main) {
-        onStatusUpdate(statusResult)
-    }
+    // IZMENJENO: Umesto pozivanja callbacka, direktno vraćamo statusResult
+    return@withContext statusResult
 }
