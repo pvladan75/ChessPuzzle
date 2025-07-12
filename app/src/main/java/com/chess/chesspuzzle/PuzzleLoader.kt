@@ -43,9 +43,14 @@ object PuzzleLoader {
             for (i in 0 until jsonArray.length()) {
                 val jsonObject: JSONObject = jsonArray.getJSONObject(i)
 
-                val id = jsonObject.getInt("id")
+                // ID sada mora biti String, konvertujemo Int iz JSON-a u String
+                val id = jsonObject.getInt("id").toString()
                 val difficulty = jsonObject.getString("difficulty")
                 val fen = jsonObject.getString("fen")
+
+                // DOHVATI NOVE PARAMETRE SA DEFAULT VREDNOSTIMA AKO NE POSTOJE U STAROM JSON-U
+                val puzzleName = jsonObject.optString("name", "Učitana Zagonetka") // Default ime ako nema u JSON-u
+                val creationDate = jsonObject.optLong("creationDate", 0L) // Default datum (0L) ako nema u JSON-u
 
                 // --- KLJUČNA LINIJA ZA DEBAGOVANJE ---
                 // Proveravamo šta je učitano kao FEN string
@@ -94,8 +99,19 @@ object PuzzleLoader {
                         continue
                     }
                 }
+
+                // KLJUČNA IZMENA: Koristi imenovane argumente i dodaj name i creationDate
                 puzzles.add(ChessProblem(
-                    id, difficulty, whitePiecesConfig, fen, solutionLength, totalBlackCaptured, capturesByPiece, solutionMoves
+                    id = id, // Sada je String
+                    name = puzzleName, // Novo polje
+                    difficulty = difficulty,
+                    whitePiecesConfig = whitePiecesConfig,
+                    fen = fen,
+                    solutionLength = solutionLength,
+                    totalBlackCaptured = totalBlackCaptured,
+                    capturesByPiece = capturesByPiece,
+                    solutionMoves = solutionMoves,
+                    creationDate = creationDate // Novo polje
                 ))
             }
         } catch (e: Exception) {

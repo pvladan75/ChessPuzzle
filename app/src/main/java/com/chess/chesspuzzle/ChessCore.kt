@@ -205,7 +205,7 @@ object ChessCore {
      * @param board Trenutna tabla.
      * @param fromSquare Početno polje figure.
      * @param toSquare Krajnje polje figure.
-     * @param pieceType Tip figure (npr. PieceType.ROOK, PieceType.BISHOP, PieceType.QUEEN).
+     * @param pieceType Tip figure (npr. PieceType.ROOK, PieceType.BISHop, PieceType.QUEEN).
      * @return True ako je putanja čista, False inače.
      */
     fun isPathClear(board: ChessBoard, fromSquare: Square, toSquare: Square, pieceType: PieceType): Boolean {
@@ -346,5 +346,49 @@ object ChessCore {
             return Square.fromCoordinates(newFileInt - 'a'.code, newRank - 1)
         }
         return null
+    }
+
+    // --- DODATO: Pomoćna funkcija za parsiranje UCI stringa "fromSquaretoSquare" u Pair<Square, Square> ---
+    /**
+     * Pomoćna funkcija za parsiranje UCI stringa "fromSquaretoSquare" u Pair<Square, Square>.
+     * Npr. "e2e4" -> Pair(Square('e',2), Square('e',4))
+     */
+    fun parseUciToSquares(uci: String): Pair<Square, Square>? {
+        if (uci.length != 4) {
+            Log.e(TAG, "Nevažeći UCI string: $uci")
+            return null
+        }
+        try {
+            val fromFile = uci[0]
+            val fromRank = uci[1].toString().toInt()
+            val toFile = uci[2]
+            val toRank = uci[3].toString().toInt()
+            return Pair(Square(fromFile, fromRank), Square(toFile, toRank))
+        } catch (e: Exception) {
+            Log.e(TAG, "Greška pri parsiranju UCI stringa '$uci': ${e.message}", e)
+            return null
+        }
+    }
+
+    // --- DODATO: Funkcija za prebrojavanje figura određene boje na tabli ---
+    /**
+     * Prebrojava figure određene boje na datoj šahovskoj tabli.
+     *
+     * @param board Šahovska tabla.
+     * @param color Boja figura koje se broje.
+     * @return Mapa gde je ključ PieceType, a vrednost broj figura tog tipa i boje.
+     */
+    fun getPieceCountsByColor(board: ChessBoard, color: PieceColor): Map<PieceType, Int> {
+        val counts = mutableMapOf<PieceType, Int>()
+        for (fileChar in 'a'..'h') {
+            for (rankInt in 1..8) {
+                val square = Square(fileChar, rankInt)
+                val piece = board.getPiece(square)
+                if (piece.type != PieceType.NONE && piece.color == color) {
+                    counts[piece.type] = counts.getOrDefault(piece.type, 0) + 1
+                }
+            }
+        }
+        return counts
     }
 }
