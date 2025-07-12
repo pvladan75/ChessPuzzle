@@ -1,19 +1,13 @@
 package com.chess.chesspuzzle
 
 import android.util.Log
-import com.chess.chesspuzzle.ChessBoard
-import com.chess.chesspuzzle.Piece
-import com.chess.chesspuzzle.PieceColor
-import com.chess.chesspuzzle.PieceType
-import com.chess.chesspuzzle.Square
+// Uklonjen import LinkedList jer se ne koristi direktno ovde
 import kotlin.random.Random
 
 class PositionGenerator(private val solver: ChessSolver) {
 
     private val TAG = "PositionGenerator"
 
-    // Sada dozvoljavamo sve tipove crnih figura osim KING
-    // PAWN je i dalje dozvoljen, ali sa ograničenjima redova
     private val ALL_BLACK_PIECE_TYPES = listOf(
         PieceType.PAWN,
         PieceType.KNIGHT,
@@ -22,96 +16,130 @@ class PositionGenerator(private val solver: ChessSolver) {
         PieceType.QUEEN
     )
 
-    /**
-     * Generiše rešivu poziciju za zagonetku "pojedi sve crne figure".
-     *
-     * @param whitePieceType Tip bele figure koja će biti na tabli (KNIGHT, BISHOP, ROOK, QUEEN).
-     * @param numBlackPieces Željeni broj crnih figura (ovo određuje i dužinu rešenja).
-     * @param maxAttempts Maksimalan broj pokušaja generisanja pozicije pre odustajanja.
-     * @return FEN string rešive pozicije, ili null ako generisanje ne uspe.
-     */
     fun generate(
-        whitePieceType: PieceType,
+        whitePiecesConfig: Map<PieceType, Int>,
         numBlackPieces: Int,
         maxAttempts: Int = 1000
     ): String? {
-        require(whitePieceType in listOf(PieceType.KNIGHT, PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN)) {
-            "Bela figura mora biti skakač, lovac, top ili kraljica."
-        }
+        require(whitePiecesConfig.isNotEmpty()) { "Mora postojati bar jedna bela figura." }
         require(numBlackPieces > 0) { "Mora biti bar jedna crna figura." }
 
         for (attempt in 0 until maxAttempts) {
             Log.d(TAG, "Pokušaj generisanja pozicije: ${attempt + 1}")
 
-            val whitePiece = Piece(whitePieceType, PieceColor.WHITE)
-            val whitePieceStartingSquare = Square.ALL_SQUARES.random()
+            var currentBoard = ChessBoard.createEmpty()
+            val whitePiecesOnBoard = mutableListOf<Pair<Piece, Square>>()
 
-            // Počinjemo sa praznom tablom i postavljamo samo belu figuru.
-            // Crne figure će biti postavljene na osnovu generisane putanje.
-            var currentBoard = ChessBoard.createEmpty().setPiece(whitePiece, whitePieceStartingSquare)
+            // 1. Postavi sve bele figure na nasumična, nezauzeta polja
+            val availableSquaresForWhite = Square.ALL_SQUARES.toMutableSet()
+            var whitePlacementSuccessful = true
 
-            val blackPiecesToPlace = mutableListOf<Pair<Square, Piece>>()
-
-            // Generišemo putanju za belu figuru
-            val generatedPath = ChessCore.generatePiecePath(currentBoard, whitePiece, whitePieceStartingSquare, numBlackPieces)
-
-            if (generatedPath.isEmpty() || generatedPath.size != numBlackPieces) {
-                Log.d(TAG, "Generisanje putanje neuspešno ili nedovoljno dugačko. Pokušavam ponovo.")
-                continue // Pokušaj ponovo
+            for ((pieceType, count) in whitePiecesConfig) {
+                for (i in 0 until count) {
+                    if (availableSquaresForWhite.isEmpty()) {
+                        Log.w(TAG, "Nema dovoljno slobodnih polja za bele figure. Prekidam trenutni pokušaj.")
+                        whitePlacementSuccessful = false
+                        break
+                    }
+                    val randomSquare = availableSquaresForWhite.random()
+                    availableSquaresForWhite.remove(randomSquare)
+                    val whitePiece = Piece(pieceType, PieceColor.WHITE)
+                    currentBoard = currentBoard.setPiece(whitePiece, randomSquare)
+                    whitePiecesOnBoard.add(whitePiece to randomSquare)
+                }
+                if (!whitePlacementSuccessful) break
+            }
+            if (!whitePlacementSuccessful) {
+                continue
             }
 
-            Log.d(TAG, "Generisana putanja za belu figuru: $generatedPath")
+            // Set za praćenje svih polja koja su već zauzeta belim figurama ili su planirana kao mete za crne figure
+            // Ovo se prosleđuje ChessCore.findCaptureTargetSquares kako bi se izbegli konflikti.
+            val globalOccupiedAndTargetSquares = mutableSetOf<Square>()
+            whitePiecesOnBoard.forEach { globalOccupiedAndTargetSquares.add(it.second) } // Dodaj početne pozicije belih figura
 
-            // Postavljanje crnih figura na putanju
-            // Temp tabla za proveru konflikata figura prilikom postavljanja
-            var tempBoardForPlacement = ChessBoard.createEmpty().setPiece(whitePiece, whitePieceStartingSquare)
-            var placementSuccessful = true
+            // Distribuiraj broj crnih figura koje svaka bela figura treba da "uhvati"
+            val capturesPerWhitePiece = distributeCaptures(numBlackPieces, whitePiecesOnBoard.size)
 
-            for (i in 0 until generatedPath.size) {
-                val targetSquare = generatedPath[i]
+            // Sakupljamo sve jedinstvene ciljne kvadrate koje su pronašle bele figure
+            val allProposedBlackTargetSquares = mutableSetOf<Square>()
 
+            // 2. Generiši ciljna polja za SVAKU belu figuru
+            var pathGenerationSuccessful = true
+            var pieceIndex = 0
+
+            for ((whitePiece, whitePieceStartingSquare) in whitePiecesOnBoard) {
+                val numCapturesForThisPiece = capturesPerWhitePiece[pieceIndex] ?: 0
+                if (numCapturesForThisPiece == 0) {
+                    pieceIndex++
+                    continue
+                }
+
+                // Prosleđujemo trenutno stanje svih zauzetih/planiranih polja
+                val generatedTargetSquaresForThisPiece = ChessCore.findCaptureTargetSquares(
+                    currentBoard, // Tabla sa svim belim figurama
+                    whitePiece,
+                    whitePieceStartingSquare,
+                    numCapturesForThisPiece,
+                    globalOccupiedAndTargetSquares // <--- Sada se šalje ispravan set
+                )
+
+                if (generatedTargetSquaresForThisPiece == null || generatedTargetSquaresForThisPiece.size != numCapturesForThisPiece) {
+                    Log.d(TAG, "Nije uspelo generisanje ${numCapturesForThisPiece} ciljnih polja za ${whitePiece.type} sa ${whitePieceStartingSquare}. Pokušavam ponovo.")
+                    pathGenerationSuccessful = false
+                    break
+                }
+                // Dodaj sva novogenerisana ciljna polja u globalni set i u set svih predloženih meta
+                globalOccupiedAndTargetSquares.addAll(generatedTargetSquaresForThisPiece)
+                allProposedBlackTargetSquares.addAll(generatedTargetSquaresForThisPiece)
+                pieceIndex++
+            }
+
+            // Provera da li je ukupan broj generisanih jedinstvenih ciljnih polja dovoljan
+            if (!pathGenerationSuccessful || allProposedBlackTargetSquares.size != numBlackPieces) {
+                Log.d(TAG, "Ukupan broj generisanih jedinstvenih ciljnih polja (${allProposedBlackTargetSquares.size}) ne odgovara broju crnih figura (${numBlackPieces}). Pokušavam ponovo.")
+                continue
+            }
+
+            Log.d(TAG, "Sve generisane putanje za bele figure, jedinstvena ciljna polja: $allProposedBlackTargetSquares")
+
+            // 3. Postavljanje crnih figura na sakupljena polja putanje
+            var finalBoardForSolver = currentBoard.copy() // Kloniramo tablu sa belim figurama
+
+            var blackPlacementSuccessful = true
+            val shuffledTargetSquares = allProposedBlackTargetSquares.shuffled() // Nasumično rasporedi ciljna polja
+
+            for (targetSquare in shuffledTargetSquares) {
                 // Generiši nasumičan tip crne figure
                 val randomBlackPieceType = ALL_BLACK_PIECE_TYPES.random()
                 val blackPiece = Piece(randomBlackPieceType, PieceColor.BLACK)
 
-                // NOVO: Proveri da li je pešak i da li je na zabranjenom redu
+                // Proveri da li je pešak i da li je na zabranjenom redu
                 if (blackPiece.type == PieceType.PAWN && (targetSquare.rank == 1 || targetSquare.rank == 8)) {
                     Log.w(TAG, "Pokušaj postavljanja crnog pešaka na zabranjeni red (${targetSquare}). Prekidam trenutni pokušaj.")
-                    placementSuccessful = false
-                    break // Prekini ovu iteraciju i pokušaj ponovo od početka
+                    blackPlacementSuccessful = false
+                    break
                 }
 
-                // Proveri da li je ciljno polje već zauzeto
-                if (tempBoardForPlacement.getPiece(targetSquare).type != PieceType.NONE) {
-                    Log.w(TAG, "Ciljno polje ${targetSquare} već zauzeto prilikom postavljanja crne figure. Prekidam trenutni pokušaj.")
-                    placementSuccessful = false
-                    break // Prekini ovu iteraciju i pokušaj ponovo od početka
+                // Ovo polje NE BI trebalo da bude zauzeto, jer je ChessCore funkcija već uzela u obzir globalOccupiedAndTargetSquares
+                // Ali ostavljam kao dodatnu sigurnosnu proveru.
+                if (finalBoardForSolver.getPiece(targetSquare).type != PieceType.NONE) {
+                    Log.w(TAG, "Ciljno polje ${targetSquare} je već zauzeto! Ovo ukazuje na problem u logici ChessCore.findCaptureTargetSquares.")
+                    blackPlacementSuccessful = false
+                    break
                 }
 
-                tempBoardForPlacement = tempBoardForPlacement.setPiece(blackPiece, targetSquare)
-                blackPiecesToPlace.add(targetSquare to blackPiece)
+                finalBoardForSolver = finalBoardForSolver.setPiece(blackPiece, targetSquare)
             }
 
-            if (!placementSuccessful) {
-                continue // Idi na sledeći pokušaj generisanja ako postavljanje nije bilo uspešno
-            }
-
-            // Ako je blackPiecesToPlace prazno, to znači da je unutrašnja petlja prekinuta zbog zauzetog polja
-            // (ovo je sada pokriveno sa !placementSuccessful provere, ali ostaje kao sigurnosna mera)
-            if (blackPiecesToPlace.isEmpty() && numBlackPieces > 0) {
-                continue
-            }
-
-            // Finalna tabla za rešavanje: Samo početna bela figura i sve generisane crne figure
-            var finalBoardForSolver = ChessBoard.createEmpty().setPiece(whitePiece, whitePieceStartingSquare)
-            for ((sq, p) in blackPiecesToPlace) {
-                finalBoardForSolver = finalBoardForSolver.setPiece(p, sq)
+            if (!blackPlacementSuccessful) {
+                continue // Idi na sledeći pokušaj generisanja ako postavljanje crnih figura nije bilo uspešno
             }
 
             Log.d(TAG, "Potencijalno generisana pozicija (FEN): ${finalBoardForSolver.toFEN()}")
             finalBoardForSolver.printBoard()
 
-            // Proveri da li je generisana pozicija rešiva korišćenjem solvera
+            // 4. Proveri da li je generisana pozicija rešiva korišćenjem solvera
             val solution = solver.solve(finalBoardForSolver)
 
             if (solution != null && solution.size == numBlackPieces) {
@@ -120,10 +148,24 @@ class PositionGenerator(private val solver: ChessSolver) {
                 return finalBoardForSolver.toFEN()
             } else {
                 Log.d(TAG, "Generisana pozicija nije rešiva ili broj poteza ne odgovara. Pokušavam ponovo.")
+                if (solution == null) {
+                    Log.d(TAG, "Solver nije pronašao rešenje za ovu poziciju.")
+                } else {
+                    Log.d(TAG, "Solver je pronašao rešenje dužine ${solution.size}, očekivano: $numBlackPieces.")
+                }
             }
         }
 
         Log.e(TAG, "Nakon $maxAttempts pokušaja, nije uspelo generisanje rešive pozicije.")
         return null
+    }
+
+    private fun distributeCaptures(totalCaptures: Int, numberOfWhitePieces: Int): List<Int> {
+        if (numberOfWhitePieces == 0) return emptyList()
+        val distribution = MutableList(numberOfWhitePieces) { 0 }
+        for (i in 0 until totalCaptures) {
+            distribution[i % numberOfWhitePieces]++
+        }
+        return distribution
     }
 }

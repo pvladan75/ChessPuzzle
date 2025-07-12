@@ -3,6 +3,7 @@ package com.chess.chesspuzzle
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -20,15 +21,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.CoroutineScope
-import kotlin.random.Random
-
 import com.chess.chesspuzzle.logic.checkGameStatusLogic
 import com.chess.chesspuzzle.logic.performMove
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.random.Random
 
 class GameActivity : ComponentActivity() {
 
@@ -47,6 +47,8 @@ class GameActivity : ComponentActivity() {
             Difficulty.EASY
         }
 
+        // Dohvatanje liste izabranih figura (samo za trening mod ako je custom odabir)
+        // U takmičarskom modu, ovo će biti prazna lista, figure se biraju po težini
         val selectedFiguresNames = intent.getStringArrayListExtra("selectedFigures") ?: arrayListOf()
         val selectedFigures = selectedFiguresNames.mapNotNull {
             try {
@@ -57,6 +59,7 @@ class GameActivity : ComponentActivity() {
             }
         }
 
+        // Dohvatanje minPawns i maxPawns
         val minPawns = intent.getIntExtra("minPawns", 3)
         val maxPawns = intent.getIntExtra("maxPawns", 5)
 
@@ -73,9 +76,9 @@ class GameActivity : ComponentActivity() {
                 ) {
                     ChessGameScreen(
                         difficulty = difficulty,
-                        selectedFigures = selectedFigures,
-                        minPawns = minPawns,
-                        maxPawns = maxPawns,
+                        selectedFigures = selectedFigures, // Prosleđujemo listu
+                        minPawns = minPawns, // Prosleđujemo minPawns
+                        maxPawns = maxPawns, // Prosleđujemo maxPawns
                         playerName = playerName,
                         isTrainingMode = isTrainingMode,
                         applicationContext = applicationContext
@@ -113,15 +116,15 @@ data class PuzzleGenerationResult(
 @Composable
 fun ChessGameScreen(
     difficulty: Difficulty,
-    selectedFigures: List<PieceType>,
-    minPawns: Int,
-    maxPawns: Int,
+    selectedFigures: List<PieceType>, // Sada prihvatamo listu
+    minPawns: Int, // Prihvatamo minPawns
+    maxPawns: Int, // Prihvatamo maxPawns
     playerName: String,
     isTrainingMode: Boolean,
     applicationContext: Context?
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val context = LocalContext.current
+    val context = LocalContext.current // Dohvatite kontekst za Toast
 
     val chessSolver = remember { ChessSolver() }
     val puzzleGenerator = remember { PositionGenerator(chessSolver) }
@@ -134,21 +137,20 @@ fun ChessGameScreen(
     var puzzleCompleted: Boolean by remember { mutableStateOf(false) }
     var noMoreMoves: Boolean by remember { mutableStateOf(false) }
 
-    val timeElapsedSecondsState = remember { mutableIntStateOf(0) } // Holds the current time in seconds
+    val timeElapsedSecondsState = remember { mutableIntStateOf(0) }
 
-    val gameStartedState = remember { mutableStateOf(false) } // Holds whether the game timer is running
+    val gameStartedState = remember { mutableStateOf(false) }
 
-    var solvedPuzzlesCount by rememberSaveable { mutableIntStateOf(0) } // This is correctly `by` delegated
-    var currentSessionScore by rememberSaveable { mutableIntStateOf(0) } // This is correctly `by` delegated
+    var solvedPuzzlesCount by rememberSaveable { mutableIntStateOf(0) }
+    var currentSessionScore by rememberSaveable { mutableIntStateOf(0) }
 
-    val selectedSquareState = remember { mutableStateOf<Square?>(null) } // Manages the currently selected square
-    val highlightedSquaresState = remember { mutableStateOf<Set<Square>>(emptySet()) } // Manages highlighted squares
+    val selectedSquareState = remember { mutableStateOf<Square?>(null) }
+    val highlightedSquaresState = remember { mutableStateOf<Set<Square>>(emptySet()) }
 
     var isSolutionDisplaying by remember { mutableStateOf(false) }
     var solverSolutionPath: List<ChessSolver.MoveData>? by remember { mutableStateOf(null) }
-    val currentSolutionStepState = remember { mutableIntStateOf(0) } // Use mutableIntStateOf for currentSolutionStep
+    val currentSolutionStepState = remember { mutableIntStateOf(0) }
 
-    // This LaunchedEffect manages the timer
     LaunchedEffect(gameStartedState.value) {
         var isTimerActive = gameStartedState.value
         while (isTimerActive) {
@@ -158,14 +160,14 @@ fun ChessGameScreen(
         }
     }
 
-    // This LaunchedEffect loads the initial puzzle
+    // Poziv generateAndLoadPuzzle kada se Composable prvi put učita
     LaunchedEffect(Unit) {
         generateAndLoadPuzzle(
             puzzleGenerator = puzzleGenerator,
             coroutineScope = coroutineScope,
             applicationContext = applicationContext,
             difficulty = difficulty,
-            selectedFigures = selectedFigures,
+            selectedFiguresFromActivity = selectedFigures, // PROMENJENO: Prosleđujemo listu sa aktivnosti
             minPawns = minPawns,
             maxPawns = maxPawns,
             playerName = playerName,
@@ -184,7 +186,8 @@ fun ChessGameScreen(
             updateSolverSolutionPath = { path -> solverSolutionPath = path },
             updateCurrentSolutionStep = { step -> currentSolutionStepState.intValue = step },
             updateBlackPieces = { pieces -> blackPieces = pieces },
-            updateSolvedPuzzlesCount = { count -> solvedPuzzlesCount = count }
+            updateSolvedPuzzlesCount = { count -> solvedPuzzlesCount = count },
+            context = context
         )
     }
 
@@ -283,8 +286,8 @@ fun ChessGameScreen(
             highlightedSquares = highlightedSquaresState.value,
             onSquareClick = { clickedSquare ->
                 if (puzzleCompleted || noMoreMoves || !gameStartedState.value || isSolutionDisplaying) {
-                    // Don't allow interaction if the puzzle is solved, no moves are left,
-                    // game hasn't started, or solution is being displayed.
+                    // Ne dozvoli interakciju ako je zagonetka rešena, nema više poteza,
+                    // igra nije počela ili se prikazuje rešenje.
                 } else {
                     val pieceOnClickedSquare = board.getPiece(clickedSquare)
 
@@ -329,8 +332,6 @@ fun ChessGameScreen(
 
                             if (isPuzzleValidMove) {
                                 // Potez je validan za zagonetku (hvata crnu figuru).
-                                // NE RESETUJEMO selectedSquareState I highlightedSquaresState OVDE!
-                                // Očekujemo da figura ostane selektovana.
                                 coroutineScope.launch {
                                     val statusResult = performMove(
                                         fromSquare,
@@ -362,7 +363,7 @@ fun ChessGameScreen(
                                             // Ako zagonetka NIJE završena, i dalje ima crnih figura za hvatanje,
                                             // treba ažurirati samo highlightovane kvadrate za sledeći potez sa iste figure.
                                             // Pretpostavljamo da je pieceToMove i dalje ista figura, samo na novom polju.
-                                            val updatedLegalMoves = ChessCore.getValidMoves(board, pieceToMove, toSquare)
+                                            val updatedLegalMoves = ChessCore.getValidMoves(board, board.getPiece(toSquare), toSquare)
                                             selectedSquareState.value = toSquare // Ažuriraj selektovano polje na novo
                                             highlightedSquaresState.value = updatedLegalMoves.toSet() // Ažuriraj highlightove
                                         }
@@ -396,25 +397,27 @@ fun ChessGameScreen(
         ) {
             Button(
                 onClick = {
+                    // Resetuj stanje prikaza rešenja
                     isSolutionDisplaying = false
                     solverSolutionPath = null
                     currentSolutionStepState.intValue = 0
 
                     selectedSquareState.value = null
                     highlightedSquaresState.value = emptySet()
-                    board = initialBoardBackup.copy()
+                    board = initialBoardBackup.copy() // Vrati na originalnu poziciju
                     puzzleCompleted = false
                     noMoreMoves = false
                     timeElapsedSecondsState.intValue = 0
-                    gameStartedState.value = true
+                    gameStartedState.value = true // Pokreni tajmer ponovo
 
+                    // Proveri status igre na resetovanoj tabli
                     coroutineScope.launch(Dispatchers.IO) {
                         val statusResult = checkGameStatusLogic(
                             board,
-                            timeElapsedSecondsState.intValue,
-                            difficulty,
-                            playerName,
-                            currentSessionScore
+                            currentTimeElapsed = 0,
+                            currentDifficulty = difficulty,
+                            playerName = playerName,
+                            currentSessionScore = currentSessionScore
                         )
                         withContext(Dispatchers.Main) {
                             blackPieces = statusResult.updatedBlackPieces
@@ -433,6 +436,7 @@ fun ChessGameScreen(
             }
             Button(
                 onClick = {
+                    // Resetuj stanje prikaza rešenja
                     isSolutionDisplaying = false
                     solverSolutionPath = null
                     currentSolutionStepState.intValue = 0
@@ -440,13 +444,14 @@ fun ChessGameScreen(
                     selectedSquareState.value = null
                     highlightedSquaresState.value = emptySet()
 
+                    // Generisanje nove zagonetke
                     coroutineScope.launch(Dispatchers.IO) {
-                        generateAndLoadPuzzle(
+                        val result = generateAndLoadPuzzle(
                             puzzleGenerator = puzzleGenerator,
-                            coroutineScope = coroutineScope,
+                            coroutineScope = this,
                             applicationContext = applicationContext,
                             difficulty = difficulty,
-                            selectedFigures = selectedFigures,
+                            selectedFiguresFromActivity = selectedFigures, // PROMENJENO: Prosleđujemo listu sa aktivnosti
                             minPawns = minPawns,
                             maxPawns = maxPawns,
                             playerName = playerName,
@@ -465,52 +470,62 @@ fun ChessGameScreen(
                             updateSolverSolutionPath = { path -> solverSolutionPath = path },
                             updateCurrentSolutionStep = { step -> currentSolutionStepState.intValue = step },
                             updateBlackPieces = { pieces -> blackPieces = pieces },
-                            updateSolvedPuzzlesCount = { count -> solvedPuzzlesCount = count }
+                            updateSolvedPuzzlesCount = { count -> solvedPuzzlesCount = count },
+                            context = context
                         )
+
+                        withContext(Dispatchers.Main) {
+                            currentSessionScore = result.newSessionScore
+                            gameStartedState.value = result.gameStartedAfterGeneration
+                            if (!result.success) {
+                                Log.e("GameActivity", "Neuspešno generisanje nove pozicije.")
+                                Toast.makeText(context, "Nije moguće generisati novu zagonetku. Pokušajte ponovo.", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                 },
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 4.dp)
             ) {
-                Text("Nova Zagonetka")
+                Text("Nova zagonetka")
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Prikaz dugmeta "Pomoć (Prikaži rešenje)" i "Sledeći potez rešenja"
         if (isTrainingMode && gameStartedState.value && !puzzleCompleted && !noMoreMoves) {
             Button(
                 onClick = {
-                    coroutineScope.launch {
-                        isSolutionDisplaying = true
-                        currentSolutionStepState.intValue = 0
-                        solverSolutionPath = null
-                        highlightedSquaresState.value = emptySet()
+                    coroutineScope.launch(Dispatchers.IO) {
+                        // Samo ako već ne prikazujemo rešenje i ako igra nije gotova
+                        if (!isSolutionDisplaying && !puzzleCompleted && !noMoreMoves) {
+                            val solution = chessSolver.solve(board) // Koristi trenutnu tablu za rešavanje
+                            withContext(Dispatchers.Main) {
+                                if (solution != null && solution.isNotEmpty()) {
+                                    solverSolutionPath = solution
+                                    isSolutionDisplaying = true
+                                    currentSolutionStepState.intValue = 0
+                                    selectedSquareState.value = null // Poništi selekciju igrača
+                                    highlightedSquaresState.value = emptySet() // Poništi highlightove igrača
 
-                        Log.d("GameActivity", "Pokrećem Solver za FEN: ${board.toFEN()}")
-                        val solution = chessSolver.solve(board)
-
-                        withContext(Dispatchers.Main) {
-                            if (solution != null && solution.isNotEmpty()) {
-                                Log.d(
-                                    "GameActivity",
-                                    "Solver pronašao rešenje: ${solution.map { it.fromSquare.toString() + "-" + it.toSquare.toString() }}"
-                                )
-                                solverSolutionPath = solution
-                                val firstMove = solution.first()
-                                highlightedSquaresState.value = setOf(firstMove.fromSquare, firstMove.toSquare)
-                            } else {
-                                Log.d(
-                                    "GameActivity",
-                                    "Solver nije pronašao rešenje za trenutnu poziciju."
-                                )
-                                solverSolutionPath = null
-                                highlightedSquaresState.value = emptySet()
-                                isSolutionDisplaying = false
+                                    // Prikaži prvi potez rešenja
+                                    val firstMove = solution[0]
+                                    val nextBoard = board.makeMoveAndCapture(firstMove.fromSquare, firstMove.toSquare)
+                                    board = nextBoard // Ažuriraj tablu na prvi potez rešenja
+                                    selectedSquareState.value = firstMove.toSquare // Selektuj figuru na novom polju
+                                    // Highlightuj sledeće poteze te figure (ako ih ima)
+                                    val updatedLegalMoves = ChessCore.getValidMoves(nextBoard, nextBoard.getPiece(firstMove.toSquare), firstMove.toSquare)
+                                    highlightedSquaresState.value = updatedLegalMoves.toSet()
+                                } else {
+                                    Log.w("GameActivity", "Solver nije pronašao rešenje za ovu poziciju.")
+                                    Toast.makeText(context, "Solver nije pronašao rešenje za ovu poziciju.", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
                     }
                 },
+                enabled = !isSolutionDisplaying && !puzzleCompleted && !noMoreMoves, // Onemogući ako je rešenje već prikazano ili je igra gotova
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp)
@@ -518,20 +533,27 @@ fun ChessGameScreen(
                 Text("Pomoć (Prikaži rešenje)")
             }
 
-            if (isSolutionDisplaying && solverSolutionPath != null && solverSolutionPath!!.size > currentSolutionStepState.intValue) {
+            if (isSolutionDisplaying && solverSolutionPath != null && solverSolutionPath!!.isNotEmpty()) {
                 Button(
                     onClick = {
-                        val nextStep = currentSolutionStepState.intValue + 1
-                        if (nextStep < solverSolutionPath!!.size) {
-                            currentSolutionStepState.intValue = nextStep
+                        // Napreduj kroz poteze rešenja
+                        currentSolutionStepState.intValue++
+                        if (currentSolutionStepState.intValue < solverSolutionPath!!.size) {
                             val nextMove = solverSolutionPath!![currentSolutionStepState.intValue]
-                            highlightedSquaresState.value = setOf(nextMove.fromSquare, nextMove.toSquare)
+                            // Primenite potez na tablu
+                            val nextBoard = board.makeMoveAndCapture(nextMove.fromSquare, nextMove.toSquare)
+                            board = nextBoard
+                            selectedSquareState.value = nextMove.toSquare
+                            val updatedLegalMoves = ChessCore.getValidMoves(nextBoard, nextBoard.getPiece(nextMove.toSquare), nextMove.toSquare)
+                            highlightedSquaresState.value = updatedLegalMoves.toSet()
                         } else {
+                            // Rešenje je završeno, resetuj prikaz
                             isSolutionDisplaying = false
                             solverSolutionPath = null
                             currentSolutionStepState.intValue = 0
-                            highlightedSquaresState.value = emptySet()
+                            board = initialBoardBackup.copy() // Vrati na početnu poziciju puzzle
                             selectedSquareState.value = null
+                            highlightedSquaresState.value = emptySet()
                             Log.d("GameActivity", "Kraj rešenja Solvera. Vraćam na igru.")
                         }
                     },
@@ -542,6 +564,7 @@ fun ChessGameScreen(
                     Text(if (currentSolutionStepState.intValue < solverSolutionPath!!.size - 1) "Sledeći potez rešenja" else "Završi prikaz rešenja")
                 }
             } else if (isSolutionDisplaying && (solverSolutionPath == null || solverSolutionPath!!.isEmpty())) {
+                // Dugme za povratak ako solver nije pronašao rešenje
                 Button(
                     onClick = {
                         isSolutionDisplaying = false
@@ -549,6 +572,7 @@ fun ChessGameScreen(
                         currentSolutionStepState.intValue = 0
                         highlightedSquaresState.value = emptySet()
                         selectedSquareState.value = null
+                        board = initialBoardBackup.copy() // Vrati na početnu poziciju
                         Log.d("GameActivity", "Nema rešenja Solvera. Vraćam na igru.")
                     },
                     modifier = Modifier
@@ -559,6 +583,7 @@ fun ChessGameScreen(
                 }
             }
         }
+
         Button(
             onClick = {
                 (context as? ComponentActivity)?.finish()
@@ -572,12 +597,13 @@ fun ChessGameScreen(
     }
 }
 
+// Globalna funkcija za generisanje i učitavanje zagonetke
 suspend fun generateAndLoadPuzzle(
     puzzleGenerator: PositionGenerator,
     coroutineScope: CoroutineScope,
     applicationContext: Context?,
     difficulty: Difficulty,
-    selectedFigures: List<PieceType>,
+    selectedFiguresFromActivity: List<PieceType>, // PROMENJENO IME PARAMETRA
     minPawns: Int,
     maxPawns: Int,
     playerName: String,
@@ -596,105 +622,116 @@ suspend fun generateAndLoadPuzzle(
     updateSolverSolutionPath: (List<ChessSolver.MoveData>?) -> Unit,
     updateCurrentSolutionStep: (Int) -> Unit,
     updateBlackPieces: (Map<Square, Piece>) -> Unit,
-    updateSolvedPuzzlesCount: (Int) -> Unit
-) {
-    withContext(Dispatchers.IO) {
-        var newPuzzleFen: String? = null
-        if (isTrainingMode) {
-            if (applicationContext == null) {
-                Log.e("GameActivity", "ApplicationContext is null for training puzzle generation!")
-            } else {
-                val whitePieceType = selectedFigures.randomOrNull() ?: PieceType.QUEEN
-                val numberOfBlackPieces = Random.nextInt(minPawns, maxPawns + 1)
+    updateSolvedPuzzlesCount: (Int) -> Unit,
+    context: Context
+): PuzzleGenerationResult {
+    var newSessionScore = currentSessionScore
+    var gameStartedAfterGeneration = false
 
-                Log.d("generateAndLoadPuzzle", "Generišem trening zagonetku: figura: $whitePieceType, broj crnih: $numberOfBlackPieces")
-                newPuzzleFen = puzzleGenerator.generate(whitePieceType, numberOfBlackPieces)
-            }
+    updatePuzzleCompleted(false)
+    updateNoMoreMoves(false)
+    updateTimeElapsedSeconds(0)
+    updateSelectedSquare(null)
+    updateHighlightedSquares(emptySet())
+    updateIsSolutionDisplaying(false)
+    updateSolverSolutionPath(null)
+    updateCurrentSolutionStep(0)
+    updateGameStarted(false) // Zaustavi tajmer dok se generiše nova pozicija
+
+    var generatedFen: String? = null
+    var penalty = 0
+
+    if (isTrainingMode) {
+        if (applicationContext == null) {
+            Log.e("GameActivity", "ApplicationContext is null for training puzzle generation!")
         } else {
-            if (applicationContext == null) {
-                Log.e("GameActivity", "ApplicationContext je null pri učitavanju takmičarske zagonetke!")
+            val numberOfBlackPiecesToGenerate = Random.nextInt(minPawns, maxPawns + 1)
+            Log.d("generateAndLoadPuzzle", "Generišem trening zagonetku: figure: ${selectedFiguresFromActivity.joinToString()}, broj crnih: ${numberOfBlackPiecesToGenerate}")
+
+            // KLJUČNA IZMENA OVDE: Konvertovanje List<PieceType> u Map<PieceType, Int>
+            val whitePiecesConfigMap: Map<PieceType, Int> = selectedFiguresFromActivity
+                .groupingBy { it }
+                .eachCount()
+                .mapValues { it.value } // Ensure it's Map<PieceType, Int>
+
+            if (whitePiecesConfigMap.isNotEmpty()) {
+                generatedFen = puzzleGenerator.generate(
+                    whitePiecesConfig = whitePiecesConfigMap, // ISPRAVLJENO: Prosleđujemo mapu!
+                    numBlackPieces = numberOfBlackPiecesToGenerate,
+                    maxAttempts = 5000
+                )
             } else {
-                Log.w("generateAndLoadPuzzle", "Takmičarski mod za sada generiše nasumičnu zagonetku jer nije implementirano učitavanje iz JSON-a unutar PositionGeneratora.")
-                val defaultWhitePieceType = when (difficulty) {
-                    Difficulty.EASY -> PieceType.KNIGHT
-                    Difficulty.MEDIUM -> PieceType.ROOK
-                    Difficulty.HARD -> PieceType.QUEEN
-                }
-                val defaultNumBlackPieces = when (difficulty) {
-                    Difficulty.EASY -> 4
-                    Difficulty.MEDIUM -> 7
-                    Difficulty.HARD -> 10
-                }
-                newPuzzleFen = puzzleGenerator.generate(defaultWhitePieceType, defaultNumBlackPieces)
+                Log.e("generateAndLoadPuzzle", "Nema odabranih belih figura za generisanje trening zagonetke!")
+                Toast.makeText(context, "Nema odabranih figura za generisanje zagonetke. Odaberite figure u prethodnom ekranu.", Toast.LENGTH_LONG).show()
+                generatedFen = null
             }
         }
+    } else {
+        // Logika za takmičarski mod - figure se automatski biraju po težini
+        val competitionWhitePiecesConfig: Map<PieceType, Int>
+        val competitionMinBlackPawns: Int
+        val competitionMaxBlackPawns: Int
+
+        // Definiši figure i range za pešake za takmičarski mod po težini
+        when (difficulty) {
+            Difficulty.EASY -> {
+                competitionWhitePiecesConfig = mapOf(PieceType.QUEEN to 1) // Npr. 1 kraljica za laku
+                competitionMinBlackPawns = 3
+                competitionMaxBlackPawns = 5
+            }
+            Difficulty.MEDIUM -> {
+                competitionWhitePiecesConfig = mapOf(PieceType.ROOK to 1, PieceType.BISHOP to 1) // Npr. 1 top i 1 lovac za srednju
+                competitionMinBlackPawns = 6
+                competitionMaxBlackPawns = 9
+            }
+            Difficulty.HARD -> {
+                competitionWhitePiecesConfig = mapOf(PieceType.QUEEN to 1, PieceType.KNIGHT to 1, PieceType.BISHOP to 1) // Npr. 1 kraljica, 1 skakač, 1 lovac za tešku
+                competitionMinBlackPawns = 10
+                competitionMaxBlackPawns = 14
+            }
+        }
+        val numberOfBlackPiecesToGenerate = Random.nextInt(competitionMinBlackPawns, competitionMaxBlackPawns + 1)
+        Log.d("GameActivity", "Generišem takmičarsku zagonetku: težina: $difficulty, figure: $competitionWhitePiecesConfig, broj crnih: $numberOfBlackPiecesToGenerate")
+
+        generatedFen = puzzleGenerator.generate(
+            whitePiecesConfig = competitionWhitePiecesConfig,
+            numBlackPieces = numberOfBlackPiecesToGenerate,
+            maxAttempts = 5000
+        )
+    }
+
+    val finalBoard: ChessBoard
+    if (generatedFen != null) {
+        finalBoard = ChessBoard.parseFenToBoard(generatedFen)
+        Log.d("GameActivity", "Učitana nova pozicija: ${generatedFen}")
+        updateBoard(finalBoard)
+        updateInitialBoardBackup(finalBoard.copy())
+
+        val statusResult = checkGameStatusLogic(
+            finalBoard,
+            currentTimeElapsed = 0,
+            currentDifficulty = difficulty,
+            playerName = playerName,
+            currentSessionScore = newSessionScore
+        )
 
         withContext(Dispatchers.Main) {
-            if (newPuzzleFen != null) {
-                val newPuzzleBoard = ChessBoard.parseFenToBoard(newPuzzleFen)
-                if (newPuzzleBoard.getPiecesMapFromBoard(PieceColor.WHITE).isNotEmpty()) {
-                    updateBoard(newPuzzleBoard)
-                    updateInitialBoardBackup(newPuzzleBoard.copy())
-                    updatePuzzleCompleted(false)
-                    updateNoMoreMoves(false)
-                    updateTimeElapsedSeconds(0)
-                    updateSelectedSquare(null)
-                    updateHighlightedSquares(emptySet())
-
-                    updateGameStarted(true)
-
-                    updateIsSolutionDisplaying(false)
-                    updateSolverSolutionPath(null)
-                    updateCurrentSolutionStep(0)
-
-                    val statusResult = checkGameStatusLogic(
-                        newPuzzleBoard,
-                        0,
-                        difficulty,
-                        playerName,
-                        currentSessionScore
-                    )
-                    updateBlackPieces(statusResult.updatedBlackPieces)
-                    updatePuzzleCompleted(statusResult.puzzleCompleted)
-                    updateNoMoreMoves(statusResult.noMoreMoves)
-                    updateSolvedPuzzlesCount(statusResult.solvedPuzzlesCountIncrement)
-                    updateCurrentSessionScore(statusResult.newSessionScore)
-                    updateGameStarted(statusResult.gameStarted)
-
-                    Log.d("PUZZLE_BOARD_STATE", "Loaded/Generated FEN: ${newPuzzleFen}")
-                    val blackPiecesOnBoard = newPuzzleBoard.getPiecesMapFromBoard(PieceColor.BLACK)
-                    Log.d(
-                        "PUZZLE_BOARD_STATE",
-                        "Black pieces detected on board (count: ${blackPiecesOnBoard.size}):"
-                    )
-                    blackPiecesOnBoard.forEach { (square, piece) ->
-                        Log.d(
-                            "PUZZLE_BOARD_STATE",
-                            "  - ${piece.color} ${piece.type} at ${square.file}${square.rank}"
-                        )
-                    }
-
-                    if (statusResult.gameStarted) {
-                        SoundManager.playSound(true)
-                    }
-
-                } else {
-                    Log.e(
-                        "GameActivity",
-                        "Nije moguće generisati/učitati zagonetku, generisana tabla nema belu figuru. Pokušajte ponovo ili promenite postavke."
-                    )
-                    updateGameStarted(false)
-                    SoundManager.playSound(false)
-                }
-            } else {
-                Log.e(
-                    "GameActivity",
-                    "Nije moguće generisati/učitati zagonetku, FEN je null. Pokušajte ponovo ili promenite postavke."
-                )
-                updateGameStarted(false)
-                SoundManager.playSound(false)
-            }
+            updateBlackPieces(statusResult.updatedBlackPieces)
+            updatePuzzleCompleted(statusResult.puzzleCompleted)
+            updateNoMoreMoves(statusResult.noMoreMoves)
+            updateCurrentSessionScore(statusResult.newSessionScore)
+            gameStartedAfterGeneration = statusResult.gameStarted
+            updateGameStarted(gameStartedAfterGeneration)
         }
+        return PuzzleGenerationResult(finalBoard, penalty, true, gameStartedAfterGeneration, newSessionScore)
+    } else {
+        Log.e("GameActivity", "Generisanje pozicije nije uspelo! Vraćam praznu tablu i penal.")
+        penalty = 100
+        newSessionScore -= penalty
+        if (newSessionScore < 0) newSessionScore = 0
+        updateCurrentSessionScore(newSessionScore)
+        updateGameStarted(false)
+        return PuzzleGenerationResult(ChessBoard.createEmpty(), penalty, false, false, newSessionScore)
     }
 }
 

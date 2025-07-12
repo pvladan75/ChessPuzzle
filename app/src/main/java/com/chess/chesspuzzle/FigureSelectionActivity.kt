@@ -37,18 +37,13 @@ class FigureSelectionActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // KLJUČNO: Dohvati ime igrača iz Intent-a koje je poslato iz MainActivity
         val playerName = intent.getStringExtra("playerName") ?: "Anonimni"
 
-        // Inicijalizujte SoundManager ovde, jer je to globalna funkcionalnost.
-        // Možete ga inicijalizovati i u nekom Application klasi ako je SoundPool potreban ranije/stalno.
-        // PROMENJENO OVDE: Koristi SoundManager.initialize()
         SoundManager.initialize(applicationContext)
 
         setContent {
             ChessPuzzleTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    // Prosledi playerName Composable funkciji FigureSelectionScreen
                     FigureSelectionScreen(playerName = playerName)
                 }
             }
@@ -57,8 +52,6 @@ class FigureSelectionActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Otpustite SoundPool resurse kada aktivnost više nije potrebna
-        // PROMENJENO OVDE: Koristi SoundManager.release()
         SoundManager.release()
     }
 }
@@ -67,19 +60,21 @@ class FigureSelectionActivity : ComponentActivity() {
 fun FigureSelectionScreen(playerName: String) {
     val context = LocalContext.current
     var selectedDifficulty by remember { mutableStateOf(Difficulty.EASY) }
+    // Koristimo remember mutableStateListOf jer se broj odabranih figura menja
     val selectedFigures = remember { mutableStateListOf<PieceType>() }
 
-    // Stanje za odabir moda (Trening ili Takmičarski)
-    var isTrainingMode by remember { mutableStateOf(true) } // Podrazumevano Trening Mod
+    var isTrainingMode by remember { mutableStateOf(true) }
 
-    // Mape koje definišu potrebne parametre po nivou težine
-    // NAPOMENA: Ove vrednosti se KORISTE SAMO za generisanje zagonetki u trening modu.
-    // Za takmičarski mod, težina se mapira na JSON konfiguraciju zagonetke.
+    // Inicijalizacija PositionGeneratora NIJE POTREBNA ovde ako se ne koristi za generisanje FEN-a
+    // Direktno iz ove aktivnosti. U vasem slucaju sam je uklonio jer je GameActivity sada zaduzen za generisanje.
+    // val chessSolver = remember { ChessSolver() }
+    // val positionGenerator = remember { PositionGenerator(chessSolver) } // Uklonjeno
+
     val requiredFigures = remember {
         mapOf(
-            Difficulty.EASY to (1 to 1), // Lako: tačno 1 bela figura
-            Difficulty.MEDIUM to (1 to 2), // Srednje: 1 do 2 bele figure
-            Difficulty.HARD to (2 to 3)    // Teško: 2 do 3 bele figure
+            Difficulty.EASY to (1 to 1),
+            Difficulty.MEDIUM to (1 to 2),
+            Difficulty.HARD to (2 to 3)
         )
     }
 
@@ -93,8 +88,8 @@ fun FigureSelectionScreen(playerName: String) {
 
     val currentRequiredMinWhiteFigures = requiredFigures[selectedDifficulty]?.first ?: 1
     val currentRequiredMaxWhiteFigures = requiredFigures[selectedDifficulty]?.second ?: 1
-    val currentMinBlackPawns = numberOfPawnsRange[selectedDifficulty]?.first ?: 1
-    val currentMaxBlackPawns = numberOfPawnsRange[selectedDifficulty]?.second ?: 1
+    val currentMinBlackPawns = numberOfPawnsRange[selectedDifficulty]?.first ?: 3 // Default
+    val currentMaxBlackPawns = numberOfPawnsRange[selectedDifficulty]?.second ?: 5 // Default
 
 
     Column(
@@ -104,7 +99,6 @@ fun FigureSelectionScreen(playerName: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Prikaz imena igrača na ekranu za odabir figura
         Text("Ime igrača: $playerName", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -117,12 +111,14 @@ fun FigureSelectionScreen(playerName: String) {
                 .selectableGroup(),
             horizontalArrangement = Arrangement.SpaceAround
         ) {
-            // Trening Mod RadioButton
             Row(
                 Modifier
                     .selectable(
                         selected = isTrainingMode,
-                        onClick = { isTrainingMode = true },
+                        onClick = {
+                            isTrainingMode = true
+                            selectedFigures.clear() // Resetuj odabrane figure pri promeni moda
+                        },
                         role = Role.RadioButton
                     )
                     .padding(horizontal = 8.dp),
@@ -132,12 +128,14 @@ fun FigureSelectionScreen(playerName: String) {
                 Text(text = "Trening")
             }
 
-            // Takmičarski Mod RadioButton
             Row(
                 Modifier
                     .selectable(
                         selected = !isTrainingMode,
-                        onClick = { isTrainingMode = false },
+                        onClick = {
+                            isTrainingMode = false
+                            selectedFigures.clear() // Resetuj odabrane figure pri promeni moda
+                        },
                         role = Role.RadioButton
                     )
                     .padding(horizontal = 8.dp),
@@ -252,7 +250,6 @@ fun FigureSelectionScreen(playerName: String) {
             }
             Spacer(modifier = Modifier.height(32.dp))
         } else {
-            // Ako je Takmičarski mod, prikaži poruku da se figure ne biraju
             Text(
                 text = "U Takmičarskom modu figure se automatski biraju na osnovu težine.",
                 style = MaterialTheme.typography.bodyLarge,
@@ -265,12 +262,10 @@ fun FigureSelectionScreen(playerName: String) {
             Spacer(modifier = Modifier.height(32.dp))
         }
 
-
-        // Provera da li je broj selektovanih figura validan za trenutnu težinu
         val canStartGame = if (isTrainingMode) {
             selectedFigures.size in currentRequiredMinWhiteFigures..currentRequiredMaxWhiteFigures && selectedFigures.isNotEmpty()
         } else {
-            true // U takmičarskom modu ne biramo figure, pa je uvek validno
+            true // Takmičarski mod ne zahteva ručni odabir figura
         }
 
         Button(
@@ -278,19 +273,21 @@ fun FigureSelectionScreen(playerName: String) {
                 if (canStartGame) {
                     val intent = Intent(context, GameActivity::class.java).apply {
                         putExtra("difficulty", selectedDifficulty.name)
-                        putExtra("isTrainingMode", isTrainingMode) // Ključna informacija za GameActivity
+                        putExtra("isTrainingMode", isTrainingMode)
+                        putExtra("playerName", playerName)
 
                         if (isTrainingMode) {
-                            // Samo za trening mod, šaljemo odabrane figure i opseg pešaka
-                            putStringArrayListExtra(
-                                "selectedFigures",
-                                ArrayList(selectedFigures.map { it.name })
-                            )
+                            // KLJUČNA IZMENA: Šaljemo listu IMENA figura kao String ArrayList
+                            val selectedFigureNames = ArrayList(selectedFigures.map { it.name })
+                            putStringArrayListExtra("selectedFigures", selectedFigureNames)
+
+                            // Slanje minPawns i maxPawns za trening mod
                             putExtra("minPawns", currentMinBlackPawns)
                             putExtra("maxPawns", currentMaxBlackPawns)
                         }
-                        // Inače, za takmičarski mod, GameActivity će koristiti samo "difficulty" za učitavanje iz JSON-a
-                        putExtra("playerName", playerName)
+                        // Za takmičarski mod, GameActivity će koristiti svoje podrazumevane figure
+                        // i broj pešaka na osnovu težine, pa ne treba slati selectedFigures
+                        // minPawns i maxPawns u ovom slučaju.
                     }
                     context.startActivity(intent)
                 } else {
@@ -302,26 +299,24 @@ fun FigureSelectionScreen(playerName: String) {
                 }
             },
             enabled = canStartGame,
-            modifier = Modifier.fillMaxWidth() // Dugme zauzima celu širinu
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text("Pokreni igru")
         }
 
-        Spacer(modifier = Modifier.height(8.dp)) // Razmak između dugmadi
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // --- NOVO DUGME: Kreiraj sam poziciju ---
         Button(
             onClick = {
                 val intent = Intent(context, PositionCreationActivity::class.java).apply {
-                    putExtra("playerName", playerName) // Prosledi ime igrača
+                    putExtra("playerName", playerName)
                 }
                 context.startActivity(intent)
             },
-            modifier = Modifier.fillMaxWidth() // Dugme zauzima celu širinu
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text("Kreiraj sam poziciju")
         }
-        // --- KRAJ NOVOG DUGMETA ---
     }
 }
 
