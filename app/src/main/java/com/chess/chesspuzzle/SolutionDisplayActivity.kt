@@ -16,42 +16,35 @@ import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
 import kotlinx.coroutines.delay
 import android.util.Log
+import androidx.compose.ui.platform.LocalContext // <-- OSTAVLJAMO OVAJ IMPORT
+import java.lang.Exception
 
-// Klase ChessProblem i SolutionMove pretpostavljamo da su sada u zasebnom fajlu,
-// na primer u 'com.chess.chesspuzzle.data.ChessProblemData.kt' ili slično.
-// U tom slučaju, ovde bi bio potreban import za njih:
-// import com.chess.chesspuzzle.data.SolutionMove
-// import com.chess.chesspuzzle.data.ChessProblem
-// Ako su u istom paketu (com.chess.chesspuzzle) i u zasebnom fajlu, import nije eksplicitno potreban.
+// Klasa ChessSolution se očekuje da je definisana globalno,
+// npr. u ChessSolver.kt ili ChessDefinitions.kt
+// data class ChessSolution(
+//     val isSolved: Boolean,
+//     val moves: List<String>,
+//     val reason: String = ""
+// )
+
 
 class SolutionDisplayActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val puzzleFen = intent.getStringExtra("puzzleFen") ?: ""
+        val solutionMoves = intent.getStringArrayListExtra("solutionMoves") ?: arrayListOf()
+
         setContent {
             ChessPuzzleTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val allPuzzles = remember {
-                        // Pretpostavka: PuzzleLoader je ili unutar com.chess.chesspuzzle paketa
-                        // ili je potreban poseban import ako je u podpaketu (npr. .util)
-                        PuzzleLoader.loadPuzzlesFromJson(this, "puzzles.json")
-                    }
-
-                    if (allPuzzles.isNotEmpty()) {
-                        SolutionScreen(puzzles = allPuzzles)
-                    } else {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Nema učitanih zagonetki. Proverite 'puzzles.json' fajl i njegovu strukturu.",
-                                style = MaterialTheme.typography.headlineMedium
-                            )
-                        }
-                    }
+                    SolutionScreen(
+                        initialFen = puzzleFen,
+                        solutionMoves = solutionMoves
+                    )
                 }
             }
         }
@@ -59,73 +52,64 @@ class SolutionDisplayActivity : ComponentActivity() {
 }
 
 @Composable
-fun SolutionScreen(puzzles: List<ChessProblem>) {
-    var currentPuzzleIndex by remember { mutableStateOf(0) }
+fun SolutionScreen(initialFen: String, solutionMoves: List<String>) {
+    // Dohvatamo LocalContext izvan lambda funkcije onClick
+    val context = LocalContext.current // <-- NOVO: Dohvatamo kontekst ovde
 
-    val currentProblem by remember(puzzles, currentPuzzleIndex) {
-        derivedStateOf {
-            if (puzzles.isNotEmpty() && currentPuzzleIndex >= 0 && currentPuzzleIndex < puzzles.size) {
-                puzzles[currentPuzzleIndex]
-            } else {
-                ChessProblem(
-                    id = 0, difficulty = "N/A", whitePiecesConfig = emptyMap(),
-                    fen = "8/8/8/8/8/8/8/8 w - - 0 1",
-                    solutionLength = 0, totalBlackCaptured = 0, capturesByPiece = emptyMap(),
-                    solutionMoves = emptyList()
-                )
-            }
-        }
-    }
-
-    // AŽURIRANO: Koristimo ChessBoard.parseFenToBoard umesto ChessCore.parseFenToBoard
-    var board: ChessBoard by remember(currentProblem.fen) {
-        mutableStateOf(ChessBoard.parseFenToBoard(currentProblem.fen))
+    var board: ChessBoard by remember(initialFen) {
+        mutableStateOf(ChessBoard.parseFenToBoard(initialFen))
     }
 
     var currentMoveIndex by remember { mutableStateOf(-1) }
     var isPlaying by remember { mutableStateOf(false) }
     var highlightedSquares: Set<Square> by remember { mutableStateOf(emptySet()) }
 
-    LaunchedEffect(isPlaying, currentMoveIndex) {
-        if (isPlaying && currentMoveIndex < currentProblem.solutionMoves.size - 1) {
+    LaunchedEffect(currentMoveIndex, initialFen) {
+        if (currentMoveIndex == -1) {
+            board = ChessBoard.parseFenToBoard(initialFen)
+            highlightedSquares = emptySet()
+        }
+    }
+
+    LaunchedEffect(isPlaying, currentMoveIndex, solutionMoves) {
+        if (isPlaying && currentMoveIndex < solutionMoves.size - 1) {
             delay(1500L)
             currentMoveIndex++
-        } else if (isPlaying && currentMoveIndex >= currentProblem.solutionMoves.size - 1) {
+        } else if (isPlaying && currentMoveIndex >= solutionMoves.size - 1) {
             isPlaying = false
         }
     }
 
-    DisposableEffect(currentMoveIndex, currentProblem) {
-        if (currentMoveIndex == -1) {
-            // AŽURIRANO: Koristimo ChessBoard.parseFenToBoard umesto ChessCore.parseFenToBoard
-            board = ChessBoard.parseFenToBoard(currentProblem.fen)
-            highlightedSquares = emptySet()
-        } else if (currentMoveIndex >= 0 && currentMoveIndex < currentProblem.solutionMoves.size) {
-            val solutionMove = currentProblem.solutionMoves[currentMoveIndex]
-            val (from, to) = PuzzleLoader.parseUciToSquares(solutionMove.moveUCI) ?: run {
-                Log.e("SolutionScreen", "Nevažeći UCI potez: ${solutionMove.moveUCI} za problem ID ${currentProblem.id}")
-                isPlaying = false
-                return@DisposableEffect onDispose {}
-            }
+    DisposableEffect(currentMoveIndex, solutionMoves) {
+        if (currentMoveIndex >= 0 && currentMoveIndex < solutionMoves.size) {
+            val moveString = solutionMoves[currentMoveIndex]
+            try {
+                // Parsiranje poteza za format "e2-e4"
+                val parts = moveString.split("-")
+                if (parts.size == 2) {
+                    val from = Square(parts[0][0], parts[0][1].digitToInt())
+                    val to = Square(parts[1][0], parts[1][1].digitToInt())
 
-            val pieceToMove = board.getPiece(from)
+                    val pieceToMove = board.getPiece(from)
 
-            if (pieceToMove.type != PieceType.NONE) {
-                var newBoard = board.removePiece(from)
-                val pieceAtTarget = board.getPiece(to)
-                if (pieceAtTarget.type != PieceType.NONE && pieceAtTarget.color != pieceToMove.color) {
-                    newBoard = newBoard.removePiece(to)
+                    if (pieceToMove.type != PieceType.NONE) {
+                        board = board.makeMoveAndCapture(from, to)
+                        highlightedSquares = setOf(from, to)
+                    } else {
+                        Log.e("SolutionScreen", "Figura ne postoji na $from za potez $moveString. Prekinuta reprodukcija.")
+                        highlightedSquares = emptySet()
+                        isPlaying = false
+                    }
+                } else {
+                    Log.e("SolutionScreen", "Nevalidan format poteza '$moveString'. Očekivan format 'e2-e4'.")
+                    highlightedSquares = emptySet()
+                    isPlaying = false
                 }
-                newBoard = newBoard.setPiece(pieceToMove, to)
-                board = newBoard
-                highlightedSquares = setOf(from, to)
-            } else {
-                Log.e("SolutionScreen", "Figura ne postoji na ${from} za potez ${solutionMove.moveUCI} u zagonetki ID ${currentProblem.id}. Prekinuta reprodukcija.")
+            } catch (e: Exception) {
+                Log.e("SolutionScreen", "Greška pri parsiranju ili primeni poteza '$moveString': ${e.message}")
                 highlightedSquares = emptySet()
                 isPlaying = false
             }
-        } else {
-            highlightedSquares = emptySet()
         }
         onDispose { /* Nema posebnog čišćenja ovde */ }
     }
@@ -137,30 +121,30 @@ fun SolutionScreen(puzzles: List<ChessProblem>) {
         verticalArrangement = Arrangement.Top
     ) {
         Text(
-            text = "Rešenje zagonetke ${currentPuzzleIndex + 1} / ${puzzles.size}",
-            style = MaterialTheme.typography.headlineMedium,
+            text = "FEN pozicija: $initialFen",
+            style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Text(
-            text = "ID: ${currentProblem.id}, Težina: ${currentProblem.difficulty}",
+            text = "Broj poteza rešenja: ${solutionMoves.size}",
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 4.dp)
         )
-        Text(
-            text = "Početna pozicija (FEN): ${currentProblem.fen}",
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-        Text(
-            text = "Ukupno uhvaćeno crnih: ${currentProblem.totalBlackCaptured}",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        Text(
-            text = "Dužina rešenja: ${currentProblem.solutionLength} poteza",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+
+        if (currentMoveIndex >= 0 && currentMoveIndex < solutionMoves.size) {
+            Text(
+                text = "Trenutni potez: ${solutionMoves[currentMoveIndex]}",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        } else {
+            Text(
+                text = "Pozicija pre prvog poteza.",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
+
 
         ChessBoardComposable(
             board = board,
@@ -170,42 +154,6 @@ fun SolutionScreen(puzzles: List<ChessProblem>) {
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = {
-                    isPlaying = false
-                    currentMoveIndex = -1
-                    if (currentPuzzleIndex > 0) {
-                        currentPuzzleIndex--
-                    }
-                },
-                enabled = currentPuzzleIndex > 0,
-                modifier = Modifier.weight(1f).padding(end = 4.dp)
-            ) {
-                Text("Prethodna zagonetka")
-            }
-
-            Button(
-                onClick = {
-                    isPlaying = false
-                    currentMoveIndex = -1
-                    if (currentPuzzleIndex < puzzles.size - 1) {
-                        currentPuzzleIndex++
-                    }
-                },
-                enabled = currentPuzzleIndex < puzzles.size - 1,
-                modifier = Modifier.weight(1f).padding(start = 4.dp)
-            ) {
-                Text("Sledeća zagonetka")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -235,11 +183,11 @@ fun SolutionScreen(puzzles: List<ChessProblem>) {
             Button(
                 onClick = {
                     isPlaying = false
-                    if (currentMoveIndex < currentProblem.solutionMoves.size - 1) {
+                    if (currentMoveIndex < solutionMoves.size - 1) {
                         currentMoveIndex++
                     }
                 },
-                enabled = currentMoveIndex < currentProblem.solutionMoves.size - 1,
+                enabled = currentMoveIndex < solutionMoves.size - 1,
                 modifier = Modifier.weight(1f).padding(start = 4.dp)
             ) {
                 Text("Sledeći potez")
@@ -257,6 +205,18 @@ fun SolutionScreen(puzzles: List<ChessProblem>) {
         ) {
             Text("Resetuj rešenje")
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            // Korišćenje 'context' promenljive dohvaćene izvan onClick lambda
+            onClick = {
+                (context as? ComponentActivity)?.finish()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Nazad na Kreiranje Pozicije")
+        }
     }
 }
 
@@ -264,36 +224,9 @@ fun SolutionScreen(puzzles: List<ChessProblem>) {
 @Composable
 fun SolutionScreenPreview() {
     ChessPuzzleTheme {
-        val previewPuzzles = remember {
-            listOf(
-                ChessProblem(
-                    id = 1,
-                    difficulty = "Lako",
-                    whitePiecesConfig = mapOf(PieceType.BISHOP to 1),
-                    fen = "1B3q2/p5p1/7p/8/8/4r3/8/8 w - - 0 1",
-                    solutionLength = 5,
-                    totalBlackCaptured = 5,
-                    capturesByPiece = mapOf("Bishop (b8)" to 5),
-                    solutionMoves = listOf(
-                        SolutionMove(PieceType.BISHOP, Square('b', 8), "b8a7"),
-                        SolutionMove(PieceType.BISHOP, Square('a', 7), "a7e3")
-                    )
-                ),
-                ChessProblem(
-                    id = 2,
-                    difficulty = "Lako",
-                    whitePiecesConfig = mapOf(PieceType.QUEEN to 1),
-                    fen = "8/1pn5/1pq5/Q1p5/4p3/8/8/8 w - - 0 1",
-                    solutionLength = 6,
-                    totalBlackCaptured = 6,
-                    capturesByPiece = mapOf("Queen (a5)" to 6),
-                    solutionMoves = listOf(
-                        SolutionMove(PieceType.QUEEN, Square('a', 5), "a5b6"),
-                        SolutionMove(PieceType.QUEEN, Square('b', 6), "b6c6")
-                    )
-                )
-            )
-        }
-        SolutionScreen(puzzles = previewPuzzles)
+        val previewFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        val previewMoves = listOf("e2-e4", "e7-e5", "g1-f3", "b8-c6") // Primer poteza sa crticom
+
+        SolutionScreen(initialFen = previewFen, solutionMoves = previewMoves)
     }
 }

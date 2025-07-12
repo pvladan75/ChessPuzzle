@@ -37,7 +37,7 @@ class PositionCreationActivity : ComponentActivity() {
             ChessPuzzleTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background // <--- ISPRAVLJENO OVDE
+                    color = MaterialTheme.colorScheme.background
                 ) {
                     PositionCreationScreen(playerName = playerName)
                 }
@@ -45,6 +45,16 @@ class PositionCreationActivity : ComponentActivity() {
         }
     }
 }
+
+// Data klasa za rezultat Solvera (treba da bude definisana negde globalno, npr. u ChessSolver.kt ili ChessDefinitions.kt)
+// Ako je već definisana u ChessSolver.kt kao što ste mi poslali, onda ovaj deo možete ukloniti.
+// Ali ako nije, stavite je ovde ili u ChessDefinitions.kt
+data class ChessSolution(
+    val isSolved: Boolean,
+    val moves: List<String>, // Lista poteza u standardnoj notaciji (npr. "e2e4")
+    val reason: String = "" // Objašnjenje ako rešenja nema ili je pozicija nevalidna
+)
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +67,9 @@ fun PositionCreationScreen(playerName: String) {
     val coroutineScope = rememberCoroutineScope()
 
     var fenInput by rememberSaveable { mutableStateOf("") }
+
+    // NOVO: Kreiranje instance ChessSolvera
+    val chessSolver = remember { ChessSolver() } // Kreiramo instancu Solvera
 
     val pieceCycle = remember {
         listOf(
@@ -91,7 +104,7 @@ fun PositionCreationScreen(playerName: String) {
         if (newPiece.type == PieceType.NONE) {
             board = board.removePiece(square)
         } else {
-            board = board.setPiece(newPiece, square) // Koristimo setPiece
+            board = board.setPiece(newPiece, square)
         }
         fenInput = board.toFEN().split(" ")[0]
     }
@@ -180,20 +193,46 @@ fun PositionCreationScreen(playerName: String) {
         }
         Spacer(modifier = Modifier.height(8.dp))
 
+        // MODIFIKOVANO DUGME "Potvrdi poziciju"
         Button(
             onClick = {
-                val createdFen = board.toFEN()
-                Log.d("PositionCreation", "Kreirana pozicija FEN: $createdFen")
-                coroutineScope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = "Pozicija kreirana! FEN: $createdFen",
-                        duration = SnackbarDuration.Short
+                val currentFen = board.toFEN()
+                Log.d("PositionCreation", "Prosleđujem FEN Solveru: $currentFen")
+
+                // POZIV SOLVERA - SADA KORISTIMO INSTANCU I METODU 'solve'
+                val moveList: List<ChessSolver.MoveData>? = chessSolver.solve(board)
+
+                val solution: ChessSolution // Deklaracija promenljive solution
+                if (moveList != null && moveList.isNotEmpty()) {
+                    // Rešenje pronađeno
+                    solution = ChessSolution(
+                        isSolved = true,
+                        moves = moveList.map { it.toString() }, // Konvertujemo MoveData u String
+                        reason = "Rešenje pronađeno."
                     )
+                } else {
+                    // Nema rešenja. Sada samo prikazujemo generičku poruku bez specifične provere kraljeva.
+                    solution = ChessSolution(false, emptyList(), "Nema rešenja za ovu poziciju.")
+                }
+
+                if (solution.isSolved) {
+                    val intent = Intent(context, SolutionDisplayActivity::class.java).apply {
+                        putExtra("puzzleFen", currentFen)
+                        putExtra("solutionMoves", ArrayList(solution.moves))
+                    }
+                    context.startActivity(intent)
+                } else {
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = solution.reason, // Prikazuje "Nema rešenja za ovu poziciju."
+                            duration = SnackbarDuration.Long
+                        )
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Potvrdi poziciju")
+            Text("Potvrdi i proveri poziciju")
         }
 
         Button(

@@ -1,11 +1,8 @@
 package com.chess.chesspuzzle
 
 import android.util.Log
-import com.chess.chesspuzzle.ChessBoard
-import com.chess.chesspuzzle.Piece
-import com.chess.chesspuzzle.PieceColor
-import com.chess.chesspuzzle.PieceType
-import com.chess.chesspuzzle.Square
+
+// Klase Piece, PieceColor, PieceType, Square, ChessBoard, ChessCore pretpostavljamo da su dostupne
 
 // Definisanje klase ChessSolver
 class ChessSolver {
@@ -13,26 +10,29 @@ class ChessSolver {
     // Data klasa za predstavljanje poteza sa pojedinom figurom
     data class MoveData(val fromSquare: Square, val toSquare: Square, val capturedPiece: Piece) {
         override fun toString(): String {
-            return "${fromSquare}-${toSquare}"
+            // Vraća format "e2-e4" kako bi SolutionDisplayActivity mogao da parsira
+            return "${fromSquare.file}${fromSquare.rank}-${toSquare.file}${toSquare.rank}"
         }
     }
 
-    // Glavni ulaz za solver
+    // Glavni ulaz za solver - sada vraća List<MoveData>?
     fun solve(initialBoard: ChessBoard): List<MoveData>? {
         val blackPiecesCount = initialBoard.getPiecesMapFromBoard(PieceColor.BLACK).size
         val whitePieces = initialBoard.getPiecesMapFromBoard(PieceColor.WHITE)
+
+        // <<-- UKLONJENA PROVERA KRALJEVA -->>
+        // val whiteKingCount = whitePieces.count { it.value.type == PieceType.KING }
+        // val blackKingCount = initialBoard.getPiecesMapFromBoard(PieceColor.BLACK).count { it.value.type == PieceType.KING }
+        // if (whiteKingCount != 1 || blackKingCount != 1) {
+        //     Log.e("ChessSolver", "Tabla mora imati tačno jednog belog i jednog crnog kralja.")
+        //     return null
+        // }
 
         if (whitePieces.isEmpty()) {
             Log.e("ChessSolver", "Nema belih figura na tabli za rešavanje.")
             return null
         }
 
-        // Trenutno pretpostavljamo jednu belu figuru. Ako ih ima više, mora se iterirati.
-        val initialWhitePieceEntry = whitePieces.entries.first()
-        val initialWhitePieceSquare = initialWhitePieceEntry.key
-        val initialWhitePiece = initialWhitePieceEntry.value
-
-        // Set za praćenje posećenih stanja table da bismo izbegli ponavljanje i petlje.
         val visitedStates = mutableSetOf<String>()
 
         Log.d("ChessSolver", "Pokrećem solver za poziciju: ${initialBoard.toFEN()} sa ${blackPiecesCount} crnih figura.")
@@ -40,8 +40,6 @@ class ChessSolver {
 
         return solveRecursive(
             currentBoard = initialBoard,
-            currentWhitePieceSquare = initialWhitePieceSquare,
-            currentWhitePiece = initialWhitePiece,
             path = mutableListOf(),
             targetCaptures = blackPiecesCount,
             visitedStates = visitedStates
@@ -50,8 +48,6 @@ class ChessSolver {
 
     private fun solveRecursive(
         currentBoard: ChessBoard,
-        currentWhitePieceSquare: Square,
-        currentWhitePiece: Piece,
         path: MutableList<MoveData>,
         targetCaptures: Int,
         visitedStates: MutableSet<String>
@@ -59,95 +55,92 @@ class ChessSolver {
 
         val boardFen = currentBoard.toFEN()
         if (visitedStates.contains(boardFen)) {
-            Log.d("ChessSolver", "Stanje već posećeno, preskačem: $boardFen")
             return null
         }
         visitedStates.add(boardFen)
 
         val remainingBlackPieces = currentBoard.getPiecesMapFromBoard(PieceColor.BLACK).size
-        Log.d("ChessSolver", "Trenutni broj pojedinih figura: ${path.size}. Preostalo crnih figura: $remainingBlackPieces")
+        Log.d("ChessSolver", "Trenutni broj uhvaćenih figura: ${path.size}. Preostalo crnih figura: $remainingBlackPieces")
 
         if (remainingBlackPieces == 0) {
             if (path.size == targetCaptures) {
                 Log.d("ChessSolver", "REŠENJE PRONAĐENO! Putanja: $path")
                 return path
             }
-            Log.w("ChessSolver", "Rešenje pronađeno, ali broj poteza se ne poklapa sa brojem figura. Expected: $targetCaptures, Actual: ${path.size}")
+            Log.w("ChessSolver", "Sve crne figure uhvaćene, ali broj poteza se ne poklapa sa brojem figura. Očekivano: $targetCaptures, Aktuelno: ${path.size}")
             return null
         }
 
         if (path.size >= targetCaptures) {
-            Log.d("ChessSolver", "Dubina pretrage prešla broj meta (${path.size} >= $targetCaptures). Nema rešenja ovde.")
+            Log.d("ChessSolver", "Dubina pretrage prešla ciljani broj figura (${path.size} >= $targetCaptures). Nema rešenja ovde.")
             return null
         }
 
-        val possibleEatingMoves = generateValidEatingMoves(currentBoard, currentWhitePieceSquare, currentWhitePiece)
-        Log.d("ChessSolver", "Mogući potezi za ${currentWhitePiece.type} na ${currentWhitePieceSquare}: $possibleEatingMoves")
+        val whitePiecesOnBoard = currentBoard.getPiecesMapFromBoard(PieceColor.WHITE)
+        val relevantWhitePieces = whitePiecesOnBoard.filter { (square, piece) ->
+            piece.color == PieceColor.WHITE &&
+                    (piece.type == PieceType.KNIGHT ||
+                            piece.type == PieceType.QUEEN ||
+                            piece.type == PieceType.ROOK ||
+                            piece.type == PieceType.BISHOP)
+        }
 
-
-        for (moveAttempt in possibleEatingMoves) {
-            val fromSquare = moveAttempt.first
-            val toSquare = moveAttempt.second
-
-            val eatenPiece = currentBoard.getPiece(toSquare)
-            if (eatenPiece.type == PieceType.NONE || eatenPiece.color != PieceColor.BLACK) {
-                Log.e("ChessSolver", "Greška u logici: Potez ${fromSquare}-${toSquare} ne hvata crnu figuru, a trebao bi.")
-                continue
+        val sortedWhitePieces = relevantWhitePieces.entries.sortedWith(compareByDescending {
+            when (it.value.type) {
+                PieceType.QUEEN -> 5
+                PieceType.ROOK -> 4
+                PieceType.BISHOP -> 3
+                PieceType.KNIGHT -> 2
+                else -> 1
             }
+        })
 
-            val currentMove = MoveData(fromSquare, toSquare, eatenPiece)
+        for ((whitePieceSquare, whitePiece) in sortedWhitePieces) {
+            val possibleEatingMoves = generateValidEatingMoves(currentBoard, whitePieceSquare, whitePiece)
 
-            var nextBoard = currentBoard.removePiece(fromSquare)
-            nextBoard = nextBoard.removePiece(toSquare)
-            nextBoard = nextBoard.setPiece(currentWhitePiece, toSquare)
+            for (moveAttempt in possibleEatingMoves) {
+                val fromSquare = moveAttempt.first
+                val toSquare = moveAttempt.second
 
-            path.add(currentMove)
-            Log.d("ChessSolver", "Pokušavam potez: $currentMove. Trenutna putanja: $path")
-            nextBoard.printBoard()
+                val eatenPiece = currentBoard.getPiece(toSquare)
+                if (eatenPiece.type == PieceType.NONE || eatenPiece.color != PieceColor.BLACK) {
+                    Log.e("ChessSolver", "Greška u logici: Potez ${fromSquare}-${toSquare} ne hvata crnu figuru, a trebao bi.")
+                    continue
+                }
 
-            val solution = solveRecursive(
-                currentBoard = nextBoard,
-                currentWhitePieceSquare = toSquare,
-                currentWhitePiece = currentWhitePiece,
-                path = path,
-                targetCaptures = targetCaptures,
-                visitedStates = visitedStates
-            )
+                val currentMove = MoveData(fromSquare, toSquare, eatenPiece)
 
-            if (solution != null) {
-                return solution
+                val nextBoard = currentBoard.makeMoveAndCapture(fromSquare, toSquare)
+
+                path.add(currentMove)
+                Log.d("ChessSolver", "Pokušavam potez: $currentMove. Trenutna putanja: $path")
+
+                val solution = solveRecursive(
+                    currentBoard = nextBoard,
+                    path = path,
+                    targetCaptures = targetCaptures,
+                    visitedStates = visitedStates
+                )
+
+                if (solution != null) {
+                    return solution
+                }
+
+                path.removeAt(path.lastIndex)
             }
-
-            path.removeAt(path.lastIndex)
         }
 
         return null
     }
 
-    /**
-     * Generiše sve validne poteze za belu figuru koji rezultiraju JEDENJEM crne figure.
-     * Koristi logiku iz ChessCore.getValidMoves i dodatno filtrira.
-     *
-     * @param board Trenutna šahovska tabla.
-     * @param pieceSquare Pozicija bele figure.
-     * @param piece Bela figura.
-     * @return Lista parova (fromSquare, toSquare) koji predstavljaju validne poteze "jedenja".
-     */
     private fun generateValidEatingMoves(board: ChessBoard, pieceSquare: Square, piece: Piece): List<Pair<Square, Square>> {
         val eatingMoves = mutableListOf<Pair<Square, Square>>()
-
         val allValidMoves = ChessCore.getValidMoves(board, piece, pieceSquare)
 
         for (targetSquare in allValidMoves) {
             val targetPiece = board.getPiece(targetSquare)
             if (targetPiece.type != PieceType.NONE && targetPiece.color == PieceColor.BLACK) {
-                // Provera za klizne figure je bitna: da li je putanja do crne figure čista
-                // (tj. da nema drugih figura IZMEĐU bele figure i crne figure).
-                // `getValidMoves` već osigurava da nema tvojih figura na putu i da je cilj validan,
-                // ali `isPathClear` eksplicitno proverava srednja polja za klizne figure.
-                if (ChessCore.isPathClear(board, pieceSquare, targetSquare, piece.type)) {
-                    eatingMoves.add(pieceSquare to targetSquare)
-                }
+                eatingMoves.add(pieceSquare to targetSquare)
             }
         }
         return eatingMoves
