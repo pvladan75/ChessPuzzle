@@ -55,7 +55,7 @@ class PositionGenerator {
                 // *** KLJUČNI DEO: Provera rešivosti sa solverom ***
                 Log.d(TAG, "Attempting to solve generated puzzle...")
                 // Prosleđujemo generisanu početnu tablu i belu figuru solveru
-                val solution = puzzleSolver.solve(generated.initialBoard, generated.whitePiece)
+                val solution = puzzleSolver.solve(generated.initialBoard)
 
                 if (solution != null) { // Ako solver pronađe bilo kakvu putanju (i do 0 figura)
                     // Proverimo da li je rešenje dovelo do 0 crnih figura

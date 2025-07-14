@@ -28,6 +28,7 @@ import com.chess.chesspuzzle.* // Importuj sve iz glavnog paketa (ChessDefinitio
 
 // Uvoz za PositionGenerator
 import com.chess.chesspuzzle.modul2.PositionGenerator // Importuj tvoju novu PositionGenerator klasu
+
 private val TAG = "Modul2GameScreenActivity"
 // Važna napomena: Difficulty enum mora biti definisan samo u ChessDefinitions.kt
 // PieceType enum se sada koristi direktno iz com.chess.chesspuzzle
@@ -49,22 +50,18 @@ class Modul2GameScreenActivity : ComponentActivity() {
         val playerName = intent.getStringExtra("playerName") ?: "Anonimni"
         val difficulty = Difficulty.valueOf(difficultyName)
 
-        // Ove ekstrakcije podataka iz intenta su i dalje korisne za konfiguraciju generatora
         val modul2OpponentTypesNames = intent.getStringArrayListExtra("modul2OpponentTypes")
         val modul2MinOpponents = intent.getIntExtra("modul2MinOpponents", 3)
         val modul2MaxOpponents = intent.getIntExtra("modul2MaxOpponents", 5)
 
         val modul2OpponentTypes = modul2OpponentTypesNames?.map { PieceType.valueOf(it) } ?: emptyList()
 
-        Log.d("Modul2GameScreenActivity", "Starting Modul 2 game for player: $playerName, Difficulty: $difficulty")
+        Log.d(TAG, "Starting Modul 2 game for player: $playerName, Difficulty: $difficulty")
 
         game = Game() // Kreiraj instancu Game klase
 
-        // >>>>>>>>>>>>> NOVA LOGIKA ZA GENERISANJE POZICIJE <<<<<<<<<<<<<
+        // >>>>>>>>>>>>> LOGIKA ZA GENERISANJE POZICIJE <<<<<<<<<<<<<
         try {
-            // Prilagodi ove brojeve figura prema tvojoj logici težine i željenim tipovima
-            // Primer prilagođavanja za `generatePuzzle` parametre:
-
             var numBishops = 0
             var numRooks = 0
             var numKnights = 0
@@ -106,10 +103,6 @@ class Modul2GameScreenActivity : ComponentActivity() {
             }
 
             // Ako je ukupan broj figura veći od maksimalnog, pokušaj smanjiti (od pešaka, pa naviše)
-            // Ova logika smanjivanja može biti kompleksna za implementaciju, za sada se oslanjamo
-            // na to da će generator automatski preskočiti pozicije sa previše figura
-            // (zbog maxAttempts ograničenja) ili da coerceAtMost to već rešava.
-            // Ako je broj i dalje previsok, PositionGenerator će baciti RuntimeException.
             while (currentTotalBlackPieces > modul2MaxOpponents) {
                 if (numPawns > 0) {
                     numPawns--
@@ -138,12 +131,12 @@ class Modul2GameScreenActivity : ComponentActivity() {
             // Logiku za učitavanje solutionPath u Game klasu ćemo dodati kasnije,
             // kada budemo implementirali proveru poteza korisnika naspram rešenja.
         } catch (e: Exception) {
-            Log.e("Modul2GameScreenActivity", "Greška pri generisanju zagonetke: ${e.message}", e)
+            Log.e(TAG, "Greška pri generisanju zagonetke: ${e.message}", e)
             Toast.makeText(this, "Greška pri generisanju zagonetke: ${e.message}. Molimo pokušajte ponovo.", Toast.LENGTH_LONG).show()
             finish() // Završi aktivnost ako ne može da se generiše tabla
             return // Važno: Prekini onCreate metod ako se javi greška
         }
-        // ^^^^^^^^^^^^^^ KRAJ NOVE LOGIKE <<<<<<<<<<<<<<
+        // ^^^^^^^^^^^^^^ KRAJ LOGIKE <<<<<<<<<<<<<<
 
         startTimer()
 
@@ -177,61 +170,6 @@ class Modul2GameScreenActivity : ComponentActivity() {
         SoundManager.release()
     }
 
-    // >>>>>>>>>>>>> Uklanjamo staru generateInitialBoardForModul2 funkciju <<<<<<<<<<<<<
-    // Ona više nije potrebna jer PositionGenerator preuzima generisanje table
-    /*
-    private fun generateInitialBoardForModul2(
-        difficulty: Difficulty,
-        minOpponents: Int,
-        maxOpponents: Int,
-        availableOpponentTypes: List<PieceType>
-    ): ChessBoard {
-        val random = Random(System.currentTimeMillis())
-        var board = ChessBoard.createEmpty()
-        val allSquares = Square.ALL_SQUARES.toMutableList()
-
-        // Koristi .random() ekstenziju sa kotlin.random.Random
-        val queenStartSquare = allSquares.random(random)
-        board = board.setPiece(Piece(PieceType.QUEEN, PieceColor.WHITE), queenStartSquare)
-        allSquares.remove(queenStartSquare)
-
-        // Koristi nextInt(from, until) sintaksu za kotlin.random.Random
-        val numberOfOpponents = random.nextInt(minOpponents, maxOpponents + 1)
-        for (i in 0 until numberOfOpponents) {
-            if (allSquares.isEmpty()) {
-                Log.w("Modul2GameScreenActivity", "Not enough empty squares to place all black pieces.")
-                break
-            }
-            // Koristi .random() ekstenziju
-            val pieceType = availableOpponentTypes.random(random)
-            val blackPiece = Piece(pieceType, PieceColor.BLACK)
-
-            var chosenSquare: Square? = null
-            val shuffledSquares = allSquares.shuffled(random)
-            for (square in shuffledSquares) {
-                val tempBoard = board.setPiece(blackPiece, square)
-                if (!tempBoard.isSquareAttacked(square, PieceColor.WHITE)) {
-                    chosenSquare = square
-                    break
-                }
-            }
-
-            if (chosenSquare != null) {
-                board = board.setPiece(blackPiece, chosenSquare)
-                allSquares.remove(chosenSquare)
-            } else {
-                Log.w("Modul2GameScreenActivity", "Could not find a safe square for black piece: $pieceType. Placing anywhere.")
-                // Koristi .random() ekstenziju
-                val fallbackSquare = allSquares.random(random)
-                board = board.setPiece(blackPiece, fallbackSquare)
-                allSquares.remove(fallbackSquare)
-            }
-        }
-        return board
-    }
-    */
-    // ^^^^^^^^^^^^^^ Kraj uklonjene funkcije ^^^^^^^^^^^^^^^
-
     private fun startTimer() {
         timer = Timer()
         timer?.scheduleAtFixedRate(object : TimerTask() {
@@ -257,10 +195,10 @@ fun Modul2GameScreen(
     var highlightedMoves by remember { mutableStateOf(emptyList<Square>()) }
     var showRestartDialog by remember { mutableStateOf(false) }
 
-    // Sve ove StateFlow kolekcije su OK
     val currentBoard by game.board.collectAsState()
-    val whiteQueen by game.whiteQueen.collectAsState() // Ovo bi trebalo da se ažurira automatski kada se tabla promeni
-    val blackPieces by game.blackPieces.collectAsState() // Ovo bi trebalo da se ažurira automatski kada se tabla promeni
+    // Promenjen naziv varijable radi jasnosti, ako u Game klasi prati "jedinu belu figuru"
+    val whitePieceOnBoard by game.whiteQueen.collectAsState()
+    val blackPieces by game.blackPieces.collectAsState()
     val moveCount by game.moveCount.collectAsState()
     val respawnCount by game.respawnCount.collectAsState()
     val puzzleSolved by game.puzzleSolved.collectAsState()
@@ -319,19 +257,20 @@ fun Modul2GameScreen(
                     val pieceOnClickedSquare = currentBoard.getPiece(clickedSquare)
 
                     if (selectedSquare == null) {
-                        if (pieceOnClickedSquare.color == PieceColor.WHITE && pieceOnClickedSquare.type == PieceType.QUEEN) {
+                        // Sada proveravamo samo da li je figura bele boje i da nije prazno polje
+                        if (pieceOnClickedSquare.color == PieceColor.WHITE && pieceOnClickedSquare.type != PieceType.NONE) {
                             selectedSquare = clickedSquare
                             highlightedMoves = game.getLegalMoves(clickedSquare)
-                            Log.d(TAG, "Queen selected at ${clickedSquare}. Possible moves: ${highlightedMoves.map { it.toString() }}")
+                            Log.d(TAG, "${pieceOnClickedSquare.type} selected at ${clickedSquare}. Possible moves: ${highlightedMoves.map { it.toString() }}")
                         } else {
-                            Toast.makeText(context, "Možete pomerati samo belu damu.", Toast.LENGTH_SHORT).show()
-                            Log.d(TAG, "Clicked on non-queen or empty square: ${clickedSquare}. No selection made.")
+                            Toast.makeText(context, "Možete pomerati samo belu figuru.", Toast.LENGTH_SHORT).show()
+                            Log.d(TAG, "Clicked on non-white piece or empty square: ${clickedSquare}. No selection made.")
                         }
                     } else {
                         if (clickedSquare == selectedSquare) {
                             selectedSquare = null
                             highlightedMoves = emptyList()
-                            Log.d(TAG, "Queen deselected.")
+                            Log.d(TAG, "White piece deselected.") // Ažurirana poruka
                         } else {
                             val move = Move(selectedSquare!!, clickedSquare)
                             Log.d(TAG, "Attempting to make move from ${selectedSquare!!} to ${clickedSquare}.")
@@ -434,8 +373,10 @@ fun Modul2GameScreen(
 fun Modul2GameScreenPreview() {
     val game = remember { Game() }
     val initialBoard = ChessBoard.createEmpty()
-        .setPiece(Piece(PieceType.QUEEN, PieceColor.WHITE), Square.fromCoordinates(4, 3)) // e4
+        // Sada možeš postaviti bilo koju belu figuru za preview
+        .setPiece(Piece(PieceType.ROOK, PieceColor.WHITE), Square.fromCoordinates(4, 3)) // e4
         .setPiece(Piece(PieceType.PAWN, PieceColor.BLACK), Square.fromCoordinates(3, 4)) // d5
+        // ISPRAVLJENA LINIJA 379: Dodato 'PieceColor.' pre 'BLACK'
         .setPiece(Piece(PieceType.KNIGHT, PieceColor.BLACK), Square.fromCoordinates(5, 5)) // f6
     game.initializeGame(initialBoard)
     game.setModul2Mode(true)

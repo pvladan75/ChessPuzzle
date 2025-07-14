@@ -7,7 +7,9 @@ import java.util.ArrayDeque // Preferiramo ArrayDeque za Queue
 // Nova data klasa za praćenje stanja u solveru
 data class SolverState(
     val board: ChessBoard,
-    val whitePieceSquare: Square,
+    val whitePieceSquare: Square, // Pozicija bele figure u ovom stanju
+    val whitePieceType: PieceType, // Tip bele figure u ovom stanju
+    val whitePieceColor: PieceColor, // Boja bele figure u ovom stanju (uvek WHITE za ovaj solver)
     val path: List<Move>,
     val blackPiecesCount: Int // Broj crnih figura na ovoj tabli
 )
@@ -23,26 +25,38 @@ class PuzzleSolver {
      * Prioritet je uhvatiti sve figure (0 preostalih).
      *
      * @param initialBoard Početno stanje table.
-     * @param whitePiece Početna bela figura (npr. dama).
      * @return Lista poteza koja predstavlja rešenje do stanja sa minimalnim brojem preostalih figura,
      * ili null ako rešenje ne postoji (npr. bela figura ne može nikoga da uhvati sigurno
      * ili se ne može doći do 0 preostalih figura).
      */
-    fun solve(initialBoard: ChessBoard, whitePiece: Piece): List<Move>? {
+    fun solve(initialBoard: ChessBoard): List<Move>? { // Uklonjen whitePiece argument
         val queue = ArrayDeque<SolverState>()
         // visitedStates sada prati par (ChessBoard, Square bele figure) da bi jedinstveno identifikovao stanje
         val visitedStates = mutableSetOf<Pair<ChessBoard, Square>>()
 
-        val initialWhitePieceSquare = initialBoard.getSquareOfPiece(whitePiece)
+        // PRONALAŽENJE JEDINE BELE FIGURE NA POČETNOJ TABLI
+        val initialWhitePieceEntry = initialBoard.pieces.entries.find { it.value.color == PieceColor.WHITE }
             ?: run {
-                Log.e(TAG, "Initial white piece not found on the board.")
+                Log.e(TAG, "No white piece found on the initial board.")
                 return null
             }
+        val initialWhitePieceSquare = initialWhitePieceEntry.key
+        val initialWhitePiece = initialWhitePieceEntry.value // Cela Piece instanca
+        // Dobićemo tip i boju bele figure za SolverState
+        val initialWhitePieceType = initialWhitePiece.type
+        val initialWhitePieceColor = initialWhitePiece.color
 
         val initialBlackPiecesCount = initialBoard.pieces.values.count { it.color == PieceColor.BLACK }
 
         // Inicijalizuj red sa početnim stanjem
-        val initialState = SolverState(initialBoard, initialWhitePieceSquare, emptyList(), initialBlackPiecesCount)
+        val initialState = SolverState(
+            initialBoard,
+            initialWhitePieceSquare,
+            initialWhitePieceType, // Dodato
+            initialWhitePieceColor, // Dodato
+            emptyList(),
+            initialBlackPiecesCount
+        )
         queue.offer(initialState)
         visitedStates.add(Pair(initialBoard, initialWhitePieceSquare)) // Dodaj početno stanje u posećene
 
@@ -55,9 +69,11 @@ class PuzzleSolver {
         }
 
         while (queue.isNotEmpty()) {
-            val currentState = queue.poll()
+            val currentState = queue.removeFirst()
             val currentBoard = currentState.board
             val currentWhitePieceSquare = currentState.whitePieceSquare
+            val currentWhitePieceType = currentState.whitePieceType // Dobijamo tip bele figure
+            val currentWhitePieceColor = currentState.whitePieceColor // Dobijamo boju bele figure
             val currentPath = currentState.path
             val currentBlackPiecesCount = currentState.blackPiecesCount
 
@@ -84,9 +100,8 @@ class PuzzleSolver {
             }
 
             // Generiši sve moguće legalne poteze za belu figuru sa trenutne pozicije
-            val whitePieceOnBoard = currentBoard.getPiece(currentWhitePieceSquare)
-            // Get all possible moves, including non-capturing ones, to find optimal path
-            val possibleMoves = getAllLegalMoves(currentBoard, currentWhitePieceSquare, whitePieceOnBoard)
+            // Koristimo currentWhitePieceType i currentWhitePieceColor koji se prenose kroz SolverState
+            val possibleMoves = getAllLegalMoves(currentBoard, currentWhitePieceSquare, currentWhitePieceType, currentWhitePieceColor)
 
             // Sortiraj poteze da hvatanja imaju prednost (opciono, ali pomaže u pronalaženju kraćih rešenja za hvatanje)
             val sortedMoves = possibleMoves.sortedByDescending { move ->
@@ -98,7 +113,6 @@ class PuzzleSolver {
                 val newWhitePieceSquare = move.end
 
                 // Proveri da li je bela figura napadnuta na novoj poziciji od preostalih crnih figura
-                // Važno: Proveravamo na nextBoard, ali bez bele figure da bi simulirali napad crnih figura na prazno polje
                 val boardWithoutTempWhitePiece = nextBoard.removePiece(newWhitePieceSquare)
                 val attackerInfo = boardWithoutTempWhitePiece.isSquareAttackedByAnyOpponent(newWhitePieceSquare, PieceColor.WHITE)
 
@@ -108,10 +122,10 @@ class PuzzleSolver {
 
                     if (newStateKey !in visitedStates) {
                         visitedStates.add(newStateKey)
-                        queue.offer(SolverState(nextBoard, newWhitePieceSquare, currentPath + move, newBlackPiecesCount))
+                        queue.offer(SolverState(nextBoard, newWhitePieceSquare, currentWhitePieceType, currentWhitePieceColor, currentPath + move, newBlackPiecesCount))
                     }
                 } else {
-                    // Log.d(TAG, "White piece (${whitePieceOnBoard.type}) would be attacked at ${newWhitePieceSquare} by ${attackerInfo.second.type} at ${attackerInfo.first} after move ${move}. Ignoring this path.")
+                    // Log.d(TAG, "White piece (${currentWhitePieceType}) would be attacked at ${newWhitePieceSquare} by ${attackerInfo.second.type} at ${attackerInfo.first} after move ${move}. Ignoring this path.")
                 }
             }
         }
@@ -135,10 +149,21 @@ class PuzzleSolver {
      * Pomoćna funkcija koja vraća sve legalne poteze bele figure,
      * uključujući i hvatanja i pomeranja na prazna polja.
      * Ova logika je slična onoj iz Game klase, ali je izdvojena ovde za potrebe solvera.
+     *
+     * @param board Trenutna tabla.
+     * @param startSquare Polje sa kojeg se figura pomera.
+     * @param whitePieceType Tip bele figure (npr. PieceType.KNIGHT).
+     * @param whitePieceColor Boja bele figure (uvek PieceColor.WHITE).
      */
-    private fun getAllLegalMoves(board: ChessBoard, startSquare: Square, whitePiece: Piece): List<Move> {
+    private fun getAllLegalMoves(
+        board: ChessBoard,
+        startSquare: Square,
+        whitePieceType: PieceType, // Primamo tip figure
+        whitePieceColor: PieceColor // Primamo boju figure
+    ): List<Move> {
         val legalMoves = mutableListOf<Move>()
-        val allPossibleMoves = whitePiece.type.getRawMoves(startSquare, whitePiece.color)
+        // Sada pozivamo getRawMoves direktno na whitePieceType
+        val allPossibleMoves = whitePieceType.getRawMoves(startSquare, whitePieceColor)
 
         for (endSquare in allPossibleMoves) {
             val potentialMove = Move(startSquare, endSquare)
@@ -149,7 +174,8 @@ class PuzzleSolver {
             // Provera da li je novo polje napadnuto vrši se u solve funkciji.
             if (pieceOnTarget.color == PieceColor.BLACK || pieceOnTarget.type == PieceType.NONE) {
                 // Dodatna provera za klizeće figure
-                if (whitePiece.type.isSlidingPiece()) {
+                // Sada pozivamo isSlidingPiece direktno na whitePieceType
+                if (whitePieceType.isSlidingPiece()) {
                     if (!board.isPathClear(startSquare, endSquare)) {
                         continue // Putanja nije čista, nije legalan potez
                     }
@@ -158,5 +184,10 @@ class PuzzleSolver {
             }
         }
         return legalMoves
+    }
+
+    // Dodata ekstenzijska funkcija za ChessBoard da lakše nađe figuru
+    private fun ChessBoard.getSquareOfPiece(pieceToFind: Piece): Square? {
+        return this.pieces.entries.find { it.value == pieceToFind }?.key
     }
 }
