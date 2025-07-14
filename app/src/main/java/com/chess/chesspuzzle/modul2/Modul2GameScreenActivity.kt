@@ -26,40 +26,106 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.* // Importuj sve iz glavnog paketa (ChessDefinitions.kt, Game.kt, ChessBoardUI.kt itd.)
-import kotlin.random.Random // Koristimo Kotlinov Random
+// NE TREBA nam kotlin.random.Random ovde jer ga PositionGenerator sada sam koristi interno
 
+// Uvoz za PositionGenerator
+import com.chess.chesspuzzle.modul2.PositionGenerator // Importuj tvoju novu PositionGenerator klasu
+private val TAG = "Modul2GameScreenActivity"
 // Važna napomena: Difficulty enum mora biti definisan samo u ChessDefinitions.kt
+// PieceType enum se sada koristi direktno iz com.chess.chesspuzzle
 
 class Modul2GameScreenActivity : ComponentActivity() {
 
     private lateinit var game: Game
     private var timer: Timer? = null
     private val handler = Handler(Looper.getMainLooper())
+    // Instanciramo PositionGenerator ovde
+    private val positionGenerator = PositionGenerator()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        SoundManager.initialize(applicationContext) // Inicijalizacija SoundManagera
 
         val difficultyName = intent.getStringExtra("difficulty") ?: Difficulty.EASY.name
         val playerName = intent.getStringExtra("playerName") ?: "Anonimni"
         val difficulty = Difficulty.valueOf(difficultyName)
 
+        // Ove ekstrakcije podataka iz intenta su i dalje korisne za konfiguraciju generatora
         val modul2OpponentTypesNames = intent.getStringArrayListExtra("modul2OpponentTypes")
         val modul2MinOpponents = intent.getIntExtra("modul2MinOpponents", 3)
         val modul2MaxOpponents = intent.getIntExtra("modul2MaxOpponents", 5)
 
         val modul2OpponentTypes = modul2OpponentTypesNames?.map { PieceType.valueOf(it) } ?: emptyList()
+        // NAPOMENA: modul2OpponentTypes, modul2MinOpponents, modul2MaxOpponents se VIŠE NE KORISTE
+        // direktno za generisanje table u `generateInitialBoardForModul2`.
+        // Umesto toga, koristićemo ih za prosleđivanje željenog broja figura PositionGeneratoru.
+        // Ali tvoj originalni generator uzima TAČAN BROJ SVAKE FIGURE.
+        // Stoga ćemo morati da pretpostavimo željene brojeve na osnovu težine.
 
         Log.d("Modul2GameScreenActivity", "Starting Modul 2 game for player: $playerName, Difficulty: $difficulty")
 
-        game = Game()
-        val initialBoard = generateInitialBoardForModul2(
-            difficulty,
-            modul2MinOpponents,
-            modul2MaxOpponents,
-            modul2OpponentTypes
-        )
-        game.initializeGame(initialBoard)
-        game.setModul2Mode(true)
+        game = Game() // Kreiraj instancu Game klase
+
+        // >>>>>>>>>>>>> NOVA LOGIKA ZA GENERISANJE POZICIJE <<<<<<<<<<<<<
+        try {
+            // Prilagodi ove brojeve figura prema tvojoj logici težine i željenim tipovima
+            // Primer prilagođavanja za `generatePuzzle` parametre:
+            val numBishops = when (difficulty) {
+                Difficulty.EASY -> 0
+                Difficulty.MEDIUM -> if (modul2OpponentTypes.contains(PieceType.BISHOP)) 1 else 0
+                Difficulty.HARD -> if (modul2OpponentTypes.contains(PieceType.BISHOP)) 2 else 0
+            }.coerceAtMost(modul2MaxOpponents.coerceAtMost(2)) // Osiguraj da ne prelazi max figuru i max 2 lovca
+
+            val numRooks = when (difficulty) {
+                Difficulty.EASY -> 0
+                Difficulty.MEDIUM -> if (modul2OpponentTypes.contains(PieceType.ROOK)) 1 else 0
+                Difficulty.HARD -> if (modul2OpponentTypes.contains(PieceType.ROOK)) 2 else 0
+            }.coerceAtMost(modul2MaxOpponents.coerceAtMost(2)) // Osiguraj da ne prelazi max figuru i max 2 topa
+
+            val numKnights = when (difficulty) {
+                Difficulty.EASY -> if (modul2OpponentTypes.contains(PieceType.KNIGHT)) 1 else 0
+                Difficulty.MEDIUM -> if (modul2OpponentTypes.contains(PieceType.KNIGHT)) 2 else 1
+                Difficulty.HARD -> if (modul2OpponentTypes.contains(PieceType.KNIGHT)) 2 else 1
+            }.coerceAtMost(modul2MaxOpponents.coerceAtMost(2)) // Osiguraj da ne prelazi max figuru i max 2 skakača
+
+            val numPawns = when (difficulty) {
+                Difficulty.EASY -> if (modul2OpponentTypes.contains(PieceType.PAWN)) 2 else 0
+                Difficulty.MEDIUM -> if (modul2OpponentTypes.contains(PieceType.PAWN)) 3 else 0
+                Difficulty.HARD -> if (modul2OpponentTypes.contains(PieceType.PAWN)) 4 else 0
+            }.coerceAtMost(modul2MaxOpponents.coerceAtMost(8)) // Osiguraj da ne prelazi max figuru i max 8 pešaka
+
+            // Podesi ukupan broj figura tako da bude unutar željenog opsega
+            var actualTotalBlackPieces = numBishops + numRooks + numKnights + numPawns
+            if (actualTotalBlackPieces < modul2MinOpponents) {
+                // Ako je ukupan broj figura manji od minimalnog, dodaj pešake dok ne dostigne minimum
+                // ili dok ne dosegne modul2MaxOpponents / 8 pešaka
+                val pawnsToAdd = (modul2MinOpponents - actualTotalBlackPieces).coerceAtMost(8 - numPawns)
+                numPawns.plus(pawnsToAdd)
+                actualTotalBlackPieces += pawnsToAdd
+            }
+            if (actualTotalBlackPieces > modul2MaxOpponents) {
+                // Ako je ukupan broj figura veći od maksimalnog, pokušaj smanjiti (od pešaka naniže)
+                // Ovo je kompleksnije, ali za sada ćemo se oslanjati na 'coerceAtMost' iznad
+                Log.w(TAG, "Generated black pieces count (${actualTotalBlackPieces}) exceeds modul2MaxOpponents (${modul2MaxOpponents}).")
+            }
+
+
+            val generatedPuzzle = positionGenerator.generatePuzzle(
+                numBlackBishops = numBishops,
+                numBlackRooks = numRooks,
+                numBlackKnights = numKnights,
+                numBlackPawns = numPawns
+            )
+            game.initializeGame(generatedPuzzle.initialBoard)
+            game.setModul2Mode(true)
+        } catch (e: Exception) {
+            Log.e("Modul2GameScreenActivity", "Greška pri generisanju zagonetke: ${e.message}", e)
+            Toast.makeText(this, "Greška pri generisanju zagonetke: ${e.message}. Molimo pokušajte ponovo.", Toast.LENGTH_LONG).show()
+            finish() // Završi aktivnost ako ne može da se generiše tabla
+            return // Važno: Prekini onCreate metod ako se javi greška
+        }
+        // ^^^^^^^^^^^^^^ KRAJ NOVE LOGIKE <<<<<<<<<<<<<<
 
         startTimer()
 
@@ -74,7 +140,7 @@ class Modul2GameScreenActivity : ComponentActivity() {
                             val restartIntent = Intent(this, Modul2GameScreenActivity::class.java).apply {
                                 putExtra("difficulty", difficultyName)
                                 putExtra("playerName", playerName)
-                                putStringArrayListExtra("modul2OpponentTypes", modul2OpponentTypesNames)
+                                putStringArrayListExtra("modul2OpponentTypes", modul2OpponentTypesNames as ArrayList<String>?)
                                 putExtra("modul2MinOpponents", modul2MinOpponents)
                                 putExtra("modul2MaxOpponents", modul2MaxOpponents)
                             }
@@ -93,6 +159,9 @@ class Modul2GameScreenActivity : ComponentActivity() {
         SoundManager.release()
     }
 
+    // >>>>>>>>>>>>> Uklanjamo staru generateInitialBoardForModul2 funkciju <<<<<<<<<<<<<
+    // Ona više nije potrebna jer PositionGenerator preuzima generisanje table
+    /*
     private fun generateInitialBoardForModul2(
         difficulty: Difficulty,
         minOpponents: Int,
@@ -142,6 +211,8 @@ class Modul2GameScreenActivity : ComponentActivity() {
         }
         return board
     }
+    */
+    // ^^^^^^^^^^^^^^ Kraj uklonjene funkcije ^^^^^^^^^^^^^^^
 
     private fun startTimer() {
         timer = Timer()
@@ -168,9 +239,10 @@ fun Modul2GameScreen(
     var highlightedMoves by remember { mutableStateOf(emptyList<Square>()) }
     var showRestartDialog by remember { mutableStateOf(false) }
 
+    // Sve ove StateFlow kolekcije su OK
     val currentBoard by game.board.collectAsState()
-    val whiteQueen by game.whiteQueen.collectAsState()
-    val blackPieces by game.blackPieces.collectAsState()
+    val whiteQueen by game.whiteQueen.collectAsState() // Ovo bi trebalo da se ažurira automatski kada se tabla promeni
+    val blackPieces by game.blackPieces.collectAsState() // Ovo bi trebalo da se ažurira automatski kada se tabla promeni
     val moveCount by game.moveCount.collectAsState()
     val respawnCount by game.respawnCount.collectAsState()
     val puzzleSolved by game.puzzleSolved.collectAsState()
@@ -179,6 +251,7 @@ fun Modul2GameScreen(
     val puzzleTime by game.puzzleTime.collectAsState()
 
     val context = LocalContext.current
+    val TAG = "Modul2GameScreen" // Dodat TAG za lakše logovanje
 
     LaunchedEffect(puzzleSolved) {
         if (puzzleSolved) {
@@ -231,27 +304,27 @@ fun Modul2GameScreen(
                         if (pieceOnClickedSquare.color == PieceColor.WHITE && pieceOnClickedSquare.type == PieceType.QUEEN) {
                             selectedSquare = clickedSquare
                             highlightedMoves = game.getLegalMoves(clickedSquare)
-                            Log.d("Modul2GameScreen", "Queen selected at ${clickedSquare}. Possible moves: ${highlightedMoves.map { it.toString() }}")
+                            Log.d(TAG, "Queen selected at ${clickedSquare}. Possible moves: ${highlightedMoves.map { it.toString() }}")
                         } else {
                             Toast.makeText(context, "Možete pomerati samo belu damu.", Toast.LENGTH_SHORT).show()
-                            Log.d("Modul2GameScreen", "Clicked on non-queen or empty square: ${clickedSquare}. No selection made.")
+                            Log.d(TAG, "Clicked on non-queen or empty square: ${clickedSquare}. No selection made.")
                         }
                     } else {
                         if (clickedSquare == selectedSquare) {
                             selectedSquare = null
                             highlightedMoves = emptyList()
-                            Log.d("Modul2GameScreen", "Queen deselected.")
+                            Log.d(TAG, "Queen deselected.")
                         } else {
                             val move = Move(selectedSquare!!, clickedSquare)
-                            Log.d("Modul2GameScreen", "Attempting to make move from ${selectedSquare!!} to ${clickedSquare}.")
+                            Log.d(TAG, "Attempting to make move from ${selectedSquare!!} to ${clickedSquare}.")
                             val moveSuccessful = game.makeMove(move)
 
                             if (moveSuccessful) {
                                 selectedSquare = null
                                 highlightedMoves = emptyList()
-                                Log.d("Modul2GameScreen", "Move successful. UI updated.")
+                                Log.d(TAG, "Move successful. UI updated.")
                             } else {
-                                Log.d("Modul2GameScreen", "Move failed or was illegal.")
+                                Log.d(TAG, "Move failed or was illegal.")
                             }
                         }
                     }
@@ -259,6 +332,7 @@ fun Modul2GameScreen(
             },
             selectedSquare = selectedSquare,
             highlightedMoves = highlightedMoves,
+            // Last attacker square se i dalje prosleđuje kao Pair, pa ga konvertujemo u Square
             lastAttackerSquare = lastAttackerPosition?.let { (rankIndex, fileIndex) -> Square.fromCoordinates(fileIndex, rankIndex) }
         )
 
@@ -295,10 +369,9 @@ fun Modul2GameScreen(
                         game.undoMove()
                         selectedSquare = null
                         highlightedMoves = emptyList()
-                        Log.d("Modul2GameScreen", "Undo performed. UI state reset.")
+                        Log.d(TAG, "Undo performed. UI state reset.")
                     }
                 },
-                // Ispravka: Pristupamo vrednosti StateFlow-a sa .value
                 enabled = game.moveCount.value > 0 && !isGameOver,
                 modifier = Modifier.fillMaxWidth()
             ) {
