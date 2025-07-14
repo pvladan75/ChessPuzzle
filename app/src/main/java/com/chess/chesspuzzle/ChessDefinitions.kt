@@ -2,7 +2,8 @@ package com.chess.chesspuzzle
 
 import android.util.Log
 import java.util.Date
-
+// Postavljamo BOARD_SIZE kao top-level konstantu
+const val BOARD_SIZE = 8
 // --- ENUMS ---
 enum class PieceType {
     PAWN,
