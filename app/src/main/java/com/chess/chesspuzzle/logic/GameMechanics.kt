@@ -94,21 +94,21 @@ fun calculateScoreInternal(timeInSeconds: Int, currentDifficulty: Difficulty): I
 
     when (currentDifficulty) {
         Difficulty.EASY -> {
-            maxTimeBonusSeconds = 90
+            maxTimeBonusSeconds = 10
             pointsPerSecond = 5
-            basePointsPerPuzzle = 300
+            basePointsPerPuzzle = 400
         }
         Difficulty.MEDIUM -> {
-            maxTimeBonusSeconds = 60
+            maxTimeBonusSeconds = 10
             pointsPerSecond = 10
-            basePointsPerPuzzle = 600
+            basePointsPerPuzzle = 700
         }
         Difficulty.HARD -> {
-            maxTimeBonusSeconds = 30
+            maxTimeBonusSeconds = 20
             pointsPerSecond = 20
             basePointsPerPuzzle = 1000
         }
     }
-    val timePoints = (maxTimeBonusSeconds - timeInSeconds).coerceAtLeast(0) * pointsPerSecond
-    return basePointsPerPuzzle + timePoints
+    val timePoints = (maxTimeBonusSeconds - timeInSeconds) * pointsPerSecond
+    return basePointsPerPuzzle + timePoints.coerceAtLeast(-400)
 }

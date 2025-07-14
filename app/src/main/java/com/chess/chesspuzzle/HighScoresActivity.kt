@@ -1,6 +1,8 @@
 package com.chess.chesspuzzle
 
 import android.os.Bundle
+import android.util.Log // Dodat import za Logcat
+import android.widget.Toast // Dodat import za Toast poruke
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,11 +25,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner // Dodat import za LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner // Dodat import za LocalLifecycleOwner
 
 // Importi za rad sa datumom i vremenom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.material3.ButtonDefaults // Dodat import za ButtonDefaults
+import androidx.compose.ui.text.font.FontStyle.Companion.Italic // Dodat import za FontStyle.Italic
 
 /**
  * Aktivnost za prikaz najboljih rezultata (High Scores).
@@ -37,6 +45,10 @@ import java.util.Locale
 class HighScoresActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Ključno: Inicijalizuj ScoreManager ovde, za svaki slučaj, iako je već u MainActivity.
+        // Ovo osigurava da je ScoreManager spreman pre nego što se pokušaju dohvatiti skorovi.
+        ScoreManager.init(applicationContext)
+
         setContent {
             ChessPuzzleTheme {
                 Surface(
@@ -57,11 +69,38 @@ class HighScoresActivity : ComponentActivity() {
 @Composable
 fun HighScoresScreen() {
     val context = LocalContext.current // Potrebno za poziv finish()
-    // Stanje za trenutno odabranu težinu, podrazumevano "Lako"
-    var selectedDifficulty by remember { mutableStateOf("Lako") }
+    val lifecycleOwner = LocalLifecycleOwner.current // Dohvata LifecycleOwner
 
-    // Lista dostupnih težina za filtriranje
-    val difficulties = listOf("Lako", "Srednje", "Teško")
+    // Stanje za trenutno odabranu težinu, podrazumevano "Lako"
+    // Koristimo Difficulty.EASY.name za doslednost sa ScoreManager ključevima
+    var selectedDifficulty by remember { mutableStateOf(Difficulty.EASY.name) }
+
+    // Liste za čuvanje rezultata po težini, koristeći mutableStateOf za reaktivnost
+    var easyScores by remember { mutableStateOf(emptyList<ScoreEntry>()) }
+    var mediumScores by remember { mutableStateOf(emptyList<ScoreEntry>()) }
+    var hardScores by remember { mutableStateOf(emptyList<ScoreEntry>()) }
+
+    // Pomoćna funkcija za učitavanje svih rezultata
+    val loadAllScores: () -> Unit = {
+        easyScores = ScoreManager.getHighScores(Difficulty.EASY.name)
+        mediumScores = ScoreManager.getHighScores(Difficulty.MEDIUM.name)
+        hardScores = ScoreManager.getHighScores(Difficulty.HARD.name)
+        Log.d("HighScoresScreen", "Scores reloaded from ScoreManager.")
+    }
+
+    // KLJUČNA IZMENA: Koristimo DisposableEffect i LifecycleEventObserver
+    // da bismo osigurali da se skorovi učitavaju svaki put kada se aktivnost (ponovo) pokrene (onResume).
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) { // Učitaj skorove svaki put kada se aktivnost nastavi
+                loadAllScores()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -83,16 +122,16 @@ fun HighScoresScreen() {
                 .padding(bottom = 16.dp),
             horizontalArrangement = Arrangement.SpaceAround // Raspoređivanje dugmadi ravnomerno
         ) {
-            difficulties.forEach { difficulty ->
+            Difficulty.entries.forEach { difficulty -> // Iteriramo kroz Difficulty enum
                 Button(
-                    onClick = { selectedDifficulty = difficulty },
+                    onClick = { selectedDifficulty = difficulty.name }, // Postavljamo name enum vrednosti
                     modifier = Modifier
                         .weight(1f) // Svako dugme zauzima jednak prostor
                         .padding(horizontal = 4.dp),
                     // Onemogućava klik na dugme ako je ta težina već odabrana
-                    enabled = selectedDifficulty != difficulty
+                    enabled = selectedDifficulty != difficulty.name
                 ) {
-                    Text(difficulty)
+                    Text(difficulty.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }) // Prikaz lepšeg imena
                 }
             }
         }
@@ -136,30 +175,58 @@ fun HighScoresScreen() {
         }
 
         // Dohvatanje i prikaz liste rezultata za odabranu težinu
-        // Rezultati se dohvataju iz ScoreManager-a i sortiraju opadajuće po skoru
-        val scores = ScoreManager.getHighScores(selectedDifficulty) // <-- ISPRAVLJENO: Nema context parametra
+        // Sada koristimo reaktivne promenljive stanja
+        val scoresToDisplay = when (selectedDifficulty) {
+            Difficulty.EASY.name -> easyScores
+            Difficulty.MEDIUM.name -> mediumScores
+            Difficulty.HARD.name -> hardScores
+            else -> emptyList() // Trebalo bi uvek da se poklopi
+        }
 
-        if (scores.isEmpty()) {
+        if (scoresToDisplay.isEmpty()) {
             // Poruka ako nema sačuvanih rezultata za trenutnu težinu
             Text(
                 text = "Nema sačuvanih rezultata za ovu težinu.",
                 modifier = Modifier.padding(top = 24.dp),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontStyle = Italic // Dodao stil za italic tekst
             )
         } else {
             // Prikaz rezultata u LazyColumn-u (efikasno za duge liste)
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
+            LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) { // Dodao heightIn
                 // Prikazujemo samo top MAX_HIGH_SCORES rezultata
-                items(scores.take(ScoreManager.MAX_HIGH_SCORES)) { scoreEntry ->
+                items(scoresToDisplay.take(ScoreManager.MAX_HIGH_SCORES)) { scoreEntry ->
                     // Svaki rezultat se prikazuje koristeći ScoreItem Composable
-                    ScoreItem(scoreEntry = scoreEntry, rank = scores.indexOf(scoreEntry) + 1)
+                    ScoreItem(scoreEntry = scoreEntry, rank = scoresToDisplay.indexOf(scoreEntry) + 1)
                 }
             }
         }
 
         // Spacer koji gura sledeće dugme na dno ekrana
         Spacer(modifier = Modifier.weight(1f))
+
+        // POČETAK KODA ZA DUGME ZA BRISANJE - IZVUČENO IZ BLOKA I INTEGRISANO**
+        // Dugme za brisanje svih rezultata
+        Button(
+            onClick = {
+                ScoreManager.clearScores(context)
+                // Ažuriraj sva stanja lista rezultata na prazne nakon brisanja
+                easyScores = emptyList()
+                mediumScores = emptyList()
+                hardScores = emptyList()
+                Toast.makeText(context, "Svi rezultati obrisani!", Toast.LENGTH_SHORT).show()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        ) {
+            Text("Obriši Sve Rezultate")
+        }
+        // KRAJ KODA ZA DUGME ZA BRISANJE**
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Dugme za povratak na glavni meni
         Button(
@@ -169,7 +236,7 @@ fun HighScoresScreen() {
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp)
+                .padding(top = 8.dp) // Povećao padding za vizuelni razmak
         ) {
             Text("Nazad na glavni meni")
         }
@@ -187,7 +254,7 @@ fun ScoreItem(scoreEntry: ScoreEntry, rank: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 4.dp) // Smanjen vertikalni padding za kompaktniji izgled
             .background(MaterialTheme.colorScheme.surfaceVariant) // Pozadina reda rezultata
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -195,23 +262,27 @@ fun ScoreItem(scoreEntry: ScoreEntry, rank: Int) {
         Text(
             text = "$rank.",
             modifier = Modifier.weight(0.5f),
-            fontSize = 15.sp
+            fontSize = 15.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = scoreEntry.playerName,
             modifier = Modifier.weight(1f),
-            fontSize = 15.sp
+            fontSize = 15.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = "${scoreEntry.score}",
             modifier = Modifier.weight(1f),
-            fontSize = 15.sp
+            fontSize = 15.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         // Prikaz datuma i vremena, formatiranog iz timestamp-a
         Text(
             text = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(scoreEntry.timestamp)),
             modifier = Modifier.weight(1f),
-            fontSize = 13.sp // Manji font za datum radi bolje čitljivosti
+            fontSize = 13.sp, // Manji font za datum radi bolje čitljivosti
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
