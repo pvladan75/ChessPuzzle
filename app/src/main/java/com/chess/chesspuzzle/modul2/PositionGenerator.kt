@@ -1,5 +1,4 @@
-// PositionGenerator.kt
-package com.chess.chesspuzzle.modul2 // Premešteno u modul2 paket
+package com.chess.chesspuzzle.modul2
 
 import android.util.Log
 import kotlin.random.Random
@@ -8,11 +7,13 @@ import com.chess.chesspuzzle.* // Uvozimo sve iz glavnog paketa za ChessBoard, P
 class PositionGenerator {
     private val random: Random = Random.Default
     private val TAG = "PositionGenerator"
+    private val puzzleSolver = PuzzleSolver() // Instanca solvera
 
     // Data klasa za generisanu zagonetku
     data class GeneratedPuzzle(
         val initialBoard: ChessBoard, // Sada vraća kompletnu ChessBoard
-        val solutionPath: List<Move> // Ostaje, iako trenutno nije popunjeno
+        val solutionPath: List<Move>, // SADA ĆE SE OVO POPUNITI STVARNIM REŠENJEM IZ SOLVERA
+        val whitePiece: Piece // Dodato da bi znali koja je bela figura i gde je na pocetku
     )
 
     /**
@@ -40,46 +41,47 @@ class PositionGenerator {
         val totalBlackPieces = numBlackBishops + numBlackRooks + numBlackKnights + numBlackPawns
         require(totalBlackPieces > 0) { "Mora postojati barem jedna crna figura na tabli." }
 
-        val maxAttemptsForChainCheck = 200
+        val maxAttempts = 500 // Povećan broj pokušaja zbog solvera
         var attempt = 0
-        var generatedWithChainCheck = false
         var result: GeneratedPuzzle? = null
 
-        // Prvo pokušaj sa uslovom lanaca
-        while (attempt < maxAttemptsForChainCheck) {
+        while (attempt < maxAttempts) {
             try {
-                result = tryGeneratePuzzleInternal(
+                // U ovoj fazi uvek generišemo sa kraljicom i uvek proveravamo lance
+                val generated = tryGeneratePuzzleInternal(
                     numBlackBishops, numBlackRooks, numBlackKnights, numBlackPawns, checkChains = true
                 )
-                generatedWithChainCheck = true
-                Log.d(TAG, "Puzzle generated successfully WITH chain check after $attempt attempts.")
-                break
-            } catch (e: RuntimeException) {
-                Log.w(TAG, "Attempt ${attempt + 1} failed with chain check: ${e.message}")
-                attempt++
-            }
-        }
 
-        // Ako nije uspelo sa uslovom lanaca, pokušaj bez njega
-        if (!generatedWithChainCheck) {
-            Log.w(TAG, "Failed to generate puzzle with chain check after $maxAttemptsForChainCheck attempts. Trying without chain check.")
-            attempt = 0
-            val maxAttemptsWithoutChainCheck = 50
-            while (attempt < maxAttemptsWithoutChainCheck) {
-                try {
-                    result = tryGeneratePuzzleInternal(
-                        numBlackBishops, numBlackRooks, numBlackKnights, numBlackPawns, checkChains = false
-                    )
-                    Log.d(TAG, "Puzzle generated successfully WITHOUT chain check after $attempt attempts.")
-                    break
-                } catch (e: RuntimeException) {
-                    Log.e(TAG, "Critical: Attempt ${attempt + 1} failed WITHOUT chain check: ${e.message}")
-                    attempt++
+                // *** KLJUČNI DEO: Provera rešivosti sa solverom ***
+                Log.d(TAG, "Attempting to solve generated puzzle...")
+                // Prosleđujemo generisanu početnu tablu i belu figuru solveru
+                val solution = puzzleSolver.solve(generated.initialBoard, generated.whitePiece)
+
+                if (solution != null) { // Ako solver pronađe bilo kakvu putanju (i do 0 figura)
+                    // Proverimo da li je rešenje dovelo do 0 crnih figura
+                    var finalBoard = generated.initialBoard
+                    for (move in solution) {
+                        finalBoard = finalBoard.movePiece(move)
+                    }
+                    val remainingBlackPieces = finalBoard.pieces.values.count { it.color == PieceColor.BLACK }
+
+                    if (remainingBlackPieces == 0) {
+                        Log.d(TAG, "Puzzle is solvable! All pieces captured in ${solution.size} moves. Returning this puzzle.")
+                        result = GeneratedPuzzle(generated.initialBoard, solution, generated.whitePiece)
+                        break // Pronašli smo rešivu zagonetku
+                    } else {
+                        Log.w(TAG, "Generated puzzle is solvable, but not all pieces are captured (${remainingBlackPieces} remaining). Retrying for a perfect solution.")
+                    }
+                } else {
+                    Log.w(TAG, "Generated puzzle is NOT solvable. Retrying...")
                 }
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "Attempt ${attempt + 1} failed during generation or initial checks: ${e.message}")
             }
+            attempt++
         }
 
-        return result ?: throw IllegalStateException("Nije moguće generisati zagonetku nakon svih pokušaja. Proverite uslove generisanja.")
+        return result ?: throw IllegalStateException("Nije moguće generisati rešivu zagonetku nakon svih pokušaja. Proverite uslove generisanja i logiku solvera.")
     }
 
     /**
@@ -97,14 +99,15 @@ class PositionGenerator {
         val occupiedSquares = mutableSetOf<Square>()
 
         // 1. Generiši belu damu na nasumičnoj poziciji
-        val allSquares = Square.ALL_SQUARES.shuffled(random)
-        val initialQueenSquare = allSquares.firstOrNull()
-            ?: throw RuntimeException("Nema dostupnih kvadrata za kraljicu.")
+        val initialWhitePiece = Piece(PieceType.QUEEN, PieceColor.WHITE) // Fiksirano na QUEEN za sada
 
-        val initialQueen = Piece(PieceType.QUEEN, PieceColor.WHITE)
-        currentBoard = currentBoard.setPiece(initialQueen, initialQueenSquare)
-        occupiedSquares.add(initialQueenSquare)
-        Log.d(TAG, "Queen placed at: ${initialQueenSquare}")
+        val allSquares = Square.ALL_SQUARES.shuffled(random)
+        val initialWhitePieceSquare = allSquares.firstOrNull()
+            ?: throw RuntimeException("Nema dostupnih kvadrata za belu figuru (${initialWhitePiece.type}).")
+
+        currentBoard = currentBoard.setPiece(initialWhitePiece, initialWhitePieceSquare)
+        occupiedSquares.add(initialWhitePieceSquare)
+        Log.d(TAG, "White ${initialWhitePiece.type} placed at: ${initialWhitePieceSquare}")
 
         // 2. Generiši crne figure (Topovi, Skakači, Lovci, Pešaci)
         val piecesToPlace = mutableListOf<PieceType>()
@@ -117,6 +120,7 @@ class PositionGenerator {
         var bishopOnLightSquare = false
         var bishopOnDarkSquare = false
 
+        // Inicijalizuj dostupna polja za crne figure
         val availableSquaresForBlack = Square.ALL_SQUARES.filter { it !in occupiedSquares }.toMutableList().shuffled(random).toMutableList()
         var currentBlackPieceIndex = 0
 
@@ -138,7 +142,7 @@ class PositionGenerator {
 
                 // Posebna logika za lovce
                 if (pieceType == PieceType.BISHOP && numBlackBishops == 2) {
-                    val isDarkSquare = (position.fileIndex + position.rankIndex) % 2 != 0
+                    val isDarkSquare = (position.fileIndex + position.rankIndex) % 2 != 0 // Ispravna provera tamnog polja
                     if (!bishopOnLightSquare && !isDarkSquare) { // Ako nema lovca na svetlom i ovo je svetlo polje
                         bishopOnLightSquare = true
                         currentBoard = currentBoard.setPiece(newPiece, position)
@@ -175,7 +179,6 @@ class PositionGenerator {
             currentBlackPieceIndex = 0 // Resetuj index za sledeću figuru
         }
 
-
         // Provera da li su svi lovci postavljeni na ispravne boje polja ako je traženo 2
         if (numBlackBishops == 2 && !(bishopOnLightSquare && bishopOnDarkSquare)) {
             throw RuntimeException("Nisu postavljena dva lovca na različite boje polja. Pokušavam ponovo.")
@@ -197,34 +200,32 @@ class PositionGenerator {
         Log.d(TAG, "Unprotected black pieces: ${unprotectedBlackPieces.joinToString { "${it.type} at ${currentBoard.getSquareOfPiece(it)}" }}")
 
 
-        // C. Provera da li dama može da napadne barem jednu nebranjenu figuru
+        // C. Provera da li bela figura može da napadne barem jednu nebranjenu figuru
         val targetPiece = unprotectedBlackPieces.random(random) // Nasumično odaberi nebranjenu figuru
         val targetSquare = currentBoard.getSquareOfPiece(targetPiece)
             ?: throw IllegalStateException("Ciljna figura nije pronađena na tabli.")
 
-        val possibleQueenStartPositions = findSafeQueenAttackPositions(
+        val possibleWhitePieceStartPositions = findSafeQueenAttackPositions(
             targetPiece,
             targetSquare,
             currentBoard,
-            initialQueenSquare, // Prosleđujemo inicijalni kvadrat kraljice
+            initialWhitePieceSquare, // Prosleđujemo inicijalni kvadrat bele figure
             allBlackPieces.filter { it != targetPiece } // Ostatak crnih figura
         )
 
-        if (possibleQueenStartPositions.isEmpty()) {
-            throw RuntimeException("Nema sigurne pozicije za damu da napadne prvu metu (${targetPiece.type} na ${targetSquare}).")
+        if (possibleWhitePieceStartPositions.isEmpty()) {
+            throw RuntimeException("Nema sigurne pozicije za belu figuru (${initialWhitePiece.type}) da napadne prvu metu (${targetPiece.type} na ${targetSquare}).")
         }
 
-        val finalQueenSquare = possibleQueenStartPositions.random(random)
-        // Ažuriraj poziciju dame na tabli
-        currentBoard = currentBoard.removePiece(initialQueenSquare) // Ukloni sa stare pozicije
-        currentBoard = currentBoard.setPiece(initialQueen, finalQueenSquare) // Postavi na novu poziciju
+        val finalWhitePieceSquare = possibleWhitePieceStartPositions.random(random)
+        // Ažuriraj poziciju bele figure na tabli
+        currentBoard = currentBoard.removePiece(initialWhitePieceSquare) // Ukloni sa stare pozicije
+        currentBoard = currentBoard.setPiece(initialWhitePiece, finalWhitePieceSquare) // Postavi na novu poziciju
 
-        Log.d(TAG, "Final Queen position set to: ${finalQueenSquare} to attack ${targetPiece.type} at ${targetSquare}.")
+        Log.d(TAG, "Final White ${initialWhitePiece.type} position set to: ${finalWhitePieceSquare} to attack ${targetPiece.type} at ${targetSquare}.")
 
-        // Trenutno ne generišemo punu putanju rešenja, pa je ostavljamo praznu.
-        val solutionPath = listOf(Move(finalQueenSquare, targetSquare))
-
-        return GeneratedPuzzle(currentBoard, solutionPath)
+        // Path je null jer ga rešava solver
+        return GeneratedPuzzle(currentBoard, emptyList(), initialWhitePiece) // Vraćamo i belu figuru
     }
 
     /**
@@ -233,7 +234,8 @@ class PositionGenerator {
      */
     private fun hasCircularDependencies(blackPieces: List<Piece>, board: ChessBoard): Boolean {
         val adjList = mutableMapOf<Square, MutableList<Square>>()
-        val pieceMap = blackPieces.associateBy { board.getSquareOfPiece(it)!! } // Mapa Square -> Piece
+        // Ovu liniju (pieceMap) si imao, ali je nekorišćena. Možemo je izbaciti.
+        // val pieceMap = blackPieces.associateBy { board.getSquareOfPiece(it)!! }
 
         blackPieces.forEach { piece ->
             val square = board.getSquareOfPiece(piece)!!
@@ -251,7 +253,10 @@ class PositionGenerator {
 
                 // Proveri da li defender napada targeta na privremenoj tabli
                 // KORISTI TVOJU EKSTENZIJU ZA PROVERU NAPADA
-                if (tempBoardForCycleCheck.isSquareAttackedByAnyOpponent(targetSquare, PieceColor.WHITE)?.first == defenderSquare) {
+                // Bilo je isSquareAttackedByAnyOpponent(targetSquare, PieceColor.WHITE) - to proverava napad BELE na TARGET SQUARE
+                // Nama treba napad CRNE figure (defenderPiece) na targetSquare
+                val attackerInfo = tempBoardForCycleCheck.isSquareAttackedByAnyOpponent(targetSquare, PieceColor.BLACK)
+                if (attackerInfo?.first == defenderSquare) { // Ako je defenderSquare napadač
                     adjList[defenderSquare]?.add(targetSquare)
                 }
             }
@@ -311,35 +316,15 @@ class PositionGenerator {
             // Proveri da li je targetPiece branjen od strane bilo koje druge crne figure
             for (defenderPiece in otherBlackPieces) {
                 val defenderSquare = board.getSquareOfPiece(defenderPiece)!!
-                // Privremeno ukloni targetPiece sa table da vidiš da li defender može da ga napadne
+                // Privremeno ukloni targetPiece sa table da simulira proveru odbrane
                 val tempBoard = board.removePiece(targetSquare)
-                val attackInfo = tempBoard.isSquareAttackedByAnyOpponent(targetSquare, PieceColor.WHITE) // Proveri da li bela dama može da ga napadne
 
-                // Ako je targetSquare napadnut od defenderPiece (koji je crn i sada brani), onda je branjen
-                if (defenderPiece.type.getRawMoves(defenderSquare, PieceColor.BLACK).contains(targetSquare)) {
-                    // Dodatna provera za klizeće figure
-                    if (defenderPiece.type.isSlidingPiece()) {
-                        if (tempBoard.isPathClear(defenderSquare, targetSquare)) {
-                            isProtected = true
-                            break
-                        }
-                    } else {
-                        // Pešaci brane dijagonalno, a ne pravo napred
-                        if (defenderPiece.type == PieceType.PAWN) {
-                            val pawnAttackMoves = if (defenderPiece.color == PieceColor.WHITE) {
-                                listOf(Square(defenderSquare.file + 1, defenderSquare.rank + 1), Square(defenderSquare.file - 1, defenderSquare.rank + 1))
-                            } else {
-                                listOf(Square(defenderSquare.file + 1, defenderSquare.rank - 1), Square(defenderSquare.file - 1, defenderSquare.rank - 1))
-                            }
-                            if (pawnAttackMoves.contains(targetSquare)) {
-                                isProtected = true
-                                break
-                            }
-                        } else {
-                            isProtected = true
-                            break
-                        }
-                    }
+                // Koristimo isSquareAttackedByAnyOpponent za proveru da li je targetSquare napadnut od defenderPiece
+                // Proveravamo da li je targetSquare napadnut od crne figure (defenderPiece je crn)
+                val attackerInfo = tempBoard.isSquareAttackedByAnyOpponent(targetSquare, PieceColor.BLACK)
+                if (attackerInfo?.first == defenderSquare) { // Ako je defenderSquare napadač
+                    isProtected = true
+                    break
                 }
             }
             if (!isProtected) {
@@ -351,57 +336,63 @@ class PositionGenerator {
 
 
     /**
-     * Pronalazi sigurne pozicije za belu damu odakle može da napadne datu ciljnu crnu figuru.
-     * "Sigurna" znači da sa te pozicije damu ne napadaju preostale crne figure.
+     * Pronalazi sigurne pozicije za belu figuru odakle može da napadne datu ciljnu crnu figuru.
+     * "Sigurna" znači da sa te pozicije belu figuru ne napadaju preostale crne figure.
+     *
+     * @param targetPiece Ciljna crna figura koju treba napasti.
+     * @param targetSquare Kvadrat ciljne crne figure.
+     * @param currentBoard Trenutna tabla.
+     * @param initialWhitePieceSquare Inicijalni kvadrat bele figure pre izračunavanja.
+     * @param otherBlackPieces Sve crne figure osim ciljne figure.
      */
     private fun findSafeQueenAttackPositions(
-        targetPiece: Piece,
+        targetPiece: Piece, // Dama je ovde fiksna, pa ne treba whitePieceType
         targetSquare: Square,
         currentBoard: ChessBoard,
-        initialQueenSquare: Square, // Originalna pozicija kraljice, da je uklonimo pri testiranju
-        otherBlackPieces: List<Piece> // Crne figure OSEM ciljne figure
+        initialWhitePieceSquare: Square, // Originalna pozicija bele figure, da je uklonimo pri testiranju
+        otherBlackPieces: List<Piece>
     ): List<Square> {
         val safePositions = mutableListOf<Square>()
 
         // 1. Privremena tabla bez ciljne figure (jer će biti pojedena)
-        //    I bez kraljice na njenoj inicijalnoj poziciji
-        var tempBoardForQueenCheck = currentBoard
-            .removePiece(targetSquare)
-            .removePiece(initialQueenSquare) // Ukloni i originalnu poziciju kraljice
+        //    I bez bele figure na njenoj inicijalnoj poziciji
+        var tempBoardForWhitePieceCheck = currentBoard
+            .removePiece(targetSquare) // Ukloni metu jer će biti pojedena
+            .removePiece(initialWhitePieceSquare) // Ukloni inicijalnu poziciju bele figure
 
         for (r in 0 until BOARD_SIZE) {
             for (c in 0 until BOARD_SIZE) {
-                val potentialQueenSquare = Square.fromCoordinates(c, r) // fileIndex pa rankIndex
+                val potentialWhitePieceSquare = Square.fromCoordinates(c, r) // fileIndex pa rankIndex
 
-                // Preskoči ako je ovo polje zauzeto drugom crnom figurom (ne ciljnom)
-                val pieceOnPotentialSquare = tempBoardForQueenCheck.getPiece(potentialQueenSquare)
+                // Preskoči ako je ovo polje zauzeto drugom crnom figurom
+                val pieceOnPotentialSquare = tempBoardForWhitePieceCheck.getPiece(potentialWhitePieceSquare)
                 if (pieceOnPotentialSquare.type != PieceType.NONE && pieceOnPotentialSquare.color == PieceColor.BLACK) {
                     continue
                 }
 
-                // Privremeno postavi damu na testiranu poziciju
-                val testBoard = tempBoardForQueenCheck.setPiece(Piece(PieceType.QUEEN, PieceColor.WHITE), potentialQueenSquare)
+                // Privremeno postavi belu figuru (QUEEN) na testiranu poziciju
+                val testWhitePiece = Piece(PieceType.QUEEN, PieceColor.WHITE) // Uvek QUEEN
+                val testBoard = tempBoardForWhitePieceCheck.setPiece(testWhitePiece, potentialWhitePieceSquare)
 
-                // Proveri da li dama sa te pozicije može da napadne ciljnu figuru
-                val queen = testBoard.getPiece(potentialQueenSquare) // Dama na testBoard
-                val rawMovesOfQueen = queen.type.getRawMoves(potentialQueenSquare, queen.color)
+                // Proveri da li bela figura sa te pozicije može da napadne ciljnu figuru
+                val rawMovesOfWhitePiece = testWhitePiece.type.getRawMoves(potentialWhitePieceSquare, testWhitePiece.color)
 
-                if (rawMovesOfQueen.contains(targetSquare)) {
-                    // Dodatna provera za klizeće figure - da li je putanja čista
-                    if (queen.type.isSlidingPiece()) {
-                        if (!testBoard.isPathClear(potentialQueenSquare, targetSquare)) {
+                if (rawMovesOfWhitePiece.contains(targetSquare)) {
+                    // Dodatna provera za klizeće figure (kraljica, top, lovac)
+                    if (testWhitePiece.type.isSlidingPiece()) {
+                        if (!testBoard.isPathClear(potentialWhitePieceSquare, targetSquare)) {
                             continue // Putanja nije čista, ovaj potez nije legalan
                         }
                     }
 
-                    // Ako može da napadne, proveri da li je to polje sigurno od napada crnih figura
-                    // Koristimo isSquareAttackedByAnyOpponent za proveru da li je bela dama napadnuta od CRNIH figura
-                    // Na testBoardu, damu je potrebno privremeno ukloniti da se simulira napad
-                    val boardWithoutTempQueen = testBoard.removePiece(potentialQueenSquare)
-                    val attackerInfo = boardWithoutTempQueen.isSquareAttackedByAnyOpponent(potentialQueenSquare, PieceColor.WHITE)
+                    // Ako može da napadne, proveri da li je to polje sigurno od napada preostalih crnih figura
+                    // Koristimo isSquareAttackedByAnyOpponent za proveru da li je bela figura napadnuta od CRNIH figura
+                    // Na testBoardu, belu figuru je potrebno privremeno ukloniti da se simulira napad
+                    val boardWithoutTempWhitePiece = testBoard.removePiece(potentialWhitePieceSquare)
+                    val attackerInfo = boardWithoutTempWhitePiece.isSquareAttackedByAnyOpponent(potentialWhitePieceSquare, PieceColor.WHITE)
 
                     if (attackerInfo == null) {
-                        safePositions.add(potentialQueenSquare)
+                        safePositions.add(potentialWhitePieceSquare)
                     }
                 }
             }
@@ -412,6 +403,7 @@ class PositionGenerator {
 
 // Ekstenzija funkcija za dobijanje kvadrata figure
 // Ova funkcija treba da se nalazi u ChessBoard.kt ili ChessDefinitions.kt
+// Ako je već tamo, ne dodaj dvaput!
 fun ChessBoard.getSquareOfPiece(piece: Piece): Square? {
     return this.pieces.entries.find { it.value == piece }?.key
 }

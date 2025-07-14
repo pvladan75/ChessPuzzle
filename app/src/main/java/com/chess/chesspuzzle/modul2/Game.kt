@@ -1,4 +1,3 @@
-// Game.kt
 package com.chess.chesspuzzle
 
 import android.util.Log
@@ -7,18 +6,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.random.Random // Koristimo kotlin.random.Random kao što je i dogovoreno
 
-// Važno: svi enumi i data klase (PieceType, PieceColor, Square, Piece, ChessBoard, ScoreEntry, Difficulty)
+// Važno: svi enumi i data klase (PieceType, PieceColor, Square, Piece, ChessBoard, ScoreEntry, Difficulty, Move)
 // treba da budu definisani isključivo u ChessDefinitions.kt
 // SoundManager treba da bude definisan isključivo u SoundManager.kt
 // Ovdje ih samo uvozimo.
 import com.chess.chesspuzzle.SoundManager // Uvoz SoundManager objekta
-// Ne treba importovati SoundType ovde, jer ga SoundManager.kt ne definiše kao poseban enum
 
 class Game {
     private val _board = MutableStateFlow(ChessBoard.createEmpty())
     val board: StateFlow<ChessBoard> = _board.asStateFlow()
 
-    private val _whiteQueen = MutableStateFlow<Piece?>(null)
+    private val _whiteQueen = MutableStateFlow<Piece?>(null) // Sada je Piece? jer može biti null na početku
     val whiteQueen: StateFlow<Piece?> = _whiteQueen.asStateFlow()
 
     private val _blackPieces = MutableStateFlow<Map<Square, Piece>>(emptyMap())
@@ -60,8 +58,11 @@ class Game {
         _currentPuzzleScore.value = 0
         _isModul2Mode.value = false // Resetuj mod prilikom inicijalizacije
 
-        val whitePieces = initialBoard.getPiecesMapFromBoard(PieceColor.WHITE)
-        _whiteQueen.value = whitePieces.entries.find { it.value.type == PieceType.QUEEN }?.value
+        // Ažuriraj belu damu i crne figure iz inicijalne table
+        // Sada tražimo i Square za belu damu da bismo je mogli lakše referencirati
+        val whiteQueenEntry = initialBoard.getPiecesMapFromBoard(PieceColor.WHITE)
+            .entries.find { it.value.type == PieceType.QUEEN }
+        _whiteQueen.value = whiteQueenEntry?.value
 
         val blackPiecesMap = initialBoard.getPiecesMapFromBoard(PieceColor.BLACK)
         _blackPieces.value = blackPiecesMap
@@ -76,8 +77,9 @@ class Game {
     }
 
     suspend fun makeMove(move: Move): Boolean {
-        val fromSquare = move.from
-        val toSquare = move.to
+        // PROMENJENO: Koristimo move.start i move.end jer je Move definisan u ChessDefinitions.kt sa tim svojstvima
+        val fromSquare = move.start
+        val toSquare = move.end
         val pieceToMove = _board.value.getPiece(fromSquare)
 
         if (pieceToMove.color != PieceColor.WHITE) {
@@ -85,14 +87,17 @@ class Game {
             return false
         }
 
+        // Koristimo getLegalMoves iz ove klase, koja će koristiti ekstenzije iz ChessDefinitions.kt
         val legalMoves = getLegalMoves(fromSquare)
+        // Legalni potezi se sada sastoje od Square objekata, pa ih direktno upoređujemo
         if (!legalMoves.contains(toSquare)) {
             Log.d("Game", "Illegal move from ${fromSquare} to ${toSquare}.")
             return false
         }
 
-        val capturedPiece = _board.value.getPiece(toSquare) // Proveri da li ima figure na ciljnom polju
-        var newBoard = _board.value.makeMoveAndCapture(fromSquare, toSquare) // Koristi makeMoveAndCapture
+        val capturedPiece = _board.value.getPiece(toSquare)
+        // Koristimo movePiece koji smo dodali u ChessBoard u ChessDefinitions.kt
+        var newBoard = _board.value.movePiece(move)
 
         _board.value = newBoard
         _moveCount.value++
@@ -119,6 +124,7 @@ class Game {
                 .entries.find { it.value.type == PieceType.QUEEN }?.key
 
             if (currentQueenSquare != null) {
+                // Poziv isSquareAttackedByAnyOpponent iz ChessDefinitions.kt
                 val attackingPieceAndSquare = newBoard.isSquareAttackedByAnyOpponent(currentQueenSquare, PieceColor.WHITE)
 
                 if (attackingPieceAndSquare != null) {
@@ -128,11 +134,12 @@ class Game {
                     SoundManager.playSound(false)
 
                     _respawnCount.value++
+                    // attackerSquare je Square, pa treba konvertovati u Pair<Int, Int>
                     _lastAttackerPosition.value = Pair(attackerSquare.rankIndex, attackerSquare.fileIndex)
 
                     val respawnedBoard = respawnQueen(newBoard, currentQueenSquare)
                     _board.value = respawnedBoard
-                    _lastAttackerPosition.value = null
+                    _lastAttackerPosition.value = null // Resetuj po završetku respawna
                     // POZIV ZVUKA: true za spawn (uspeh respawna)
                     SoundManager.playSound(true)
 
@@ -165,11 +172,19 @@ class Game {
             return emptyList()
         }
 
+        // Koristimo getRawMoves kao ekstenziju PieceType
         val possibleMoves = piece.type.getRawMoves(fromSquare, piece.color)
         val legalMoves = mutableListOf<Square>()
 
         for (targetSquare in possibleMoves) {
+            // Provera da li je potez unutar granica table i nije na isto polje
+            if (targetSquare.file !in 'a'..'h' || targetSquare.rank !in 1..8 || targetSquare == fromSquare) {
+                continue
+            }
+
+            // Provera putanje za klizeće figure
             if (piece.type.isSlidingPiece()) {
+                // Koristimo isPathClear kao ekstenziju ChessBoard
                 if (!_board.value.isPathClear(fromSquare, targetSquare)) {
                     continue
                 }
@@ -177,15 +192,30 @@ class Game {
 
             val targetPiece = _board.value.getPiece(targetSquare)
 
+            // Ne možeš hvatati svoje figure
             if (targetPiece.color == piece.color) {
                 continue
             }
 
+            // Provera šaha nakon poteza
+            // Kreiraj privremenu tablu sa izvršenim potezom
+            val tempBoardAfterMove = _board.value.movePiece(Move(fromSquare, targetSquare))
+            val whiteKingOrQueenSquare = tempBoardAfterMove.getPiecesMapFromBoard(PieceColor.WHITE)
+                .entries.find { it.value.type == PieceType.QUEEN || it.value.type == PieceType.KING }?.key // Tražimo kraljicu ili kralja
+
+            // Ako bela figura (kraljica) ostaje u šahu, potez nije legalan
+            if (whiteKingOrQueenSquare != null && tempBoardAfterMove.isSquareAttackedByAnyOpponent(whiteKingOrQueenSquare, PieceColor.WHITE) != null) {
+                continue
+            }
+
+            // Dodatna logika za hvatanje u Modulu 2
             if (_isModul2Mode.value) {
+                // U Modulu 2 bela dama treba da hvata crne figure
                 if (targetPiece.type == PieceType.NONE || targetPiece.color == PieceColor.BLACK) {
                     legalMoves.add(targetSquare)
                 }
             } else {
+                // U regularnom modu, svi legalni potezi su dozvoljeni
                 legalMoves.add(targetSquare)
             }
         }
@@ -206,22 +236,25 @@ class Game {
 
         var newQueenSquare: Square
         var placed = false
+        // Petlja za pronalaženje sigurnog polja za respawn
         while (!placed) {
             newQueenSquare = emptySquares.random(random) // Koristimo .random() iz kotlin.random
-            if (!newBoard.isSquareAttacked(newQueenSquare, PieceColor.BLACK)) { // Proveri da li je napadnuto od CRNIH figura
+            // Proveri da li je novo polje napadnuto od CRNIH figura
+            if (!newBoard.isSquareAttacked(newQueenSquare, PieceColor.BLACK)) { // Koristimo isSquareAttacked iz ChessDefinitions.kt
                 newBoard = newBoard.setPiece(Piece(PieceType.QUEEN, PieceColor.WHITE), newQueenSquare)
-                _whiteQueen.value = Piece(PieceType.QUEEN, PieceColor.WHITE)
+                _whiteQueen.value = Piece(PieceType.QUEEN, PieceColor.WHITE) // Ažuriraj StateFlow
                 placed = true
                 Log.d("Game", "Queen respawned at ${newQueenSquare}")
             } else {
                 Log.d("Game", "Attempted respawn at ${newQueenSquare} but it's attacked. Trying again.")
-                emptySquares.remove(newQueenSquare)
+                emptySquares.remove(newQueenSquare) // Ukloni napadnuto polje iz liste kandidata
                 if (emptySquares.isEmpty()) {
                     Log.e("Game", "All empty squares are attacked after respawn, forcing placement.")
                     // Fallback: ako su sva prazna polja napadnuta, stavi je bilo gde
-                    newQueenSquare = Square.ALL_SQUARES.filter { currentBoard.getPiece(it).type == PieceType.NONE }.random(random)
+                    // Uzmi prvo prazno polje, ili jednostavno forsiraj na random ako je sve napadnuto
+                    newQueenSquare = Square.ALL_SQUARES.filter { currentBoard.getPiece(it).type == PieceType.NONE }.firstOrNull() ?: Square('a',1) // Uzmi prvo prazno ili a1 kao fallback
                     newBoard = newBoard.setPiece(Piece(PieceType.QUEEN, PieceColor.WHITE), newQueenSquare)
-                    _whiteQueen.value = Piece(PieceType.QUEEN, PieceColor.WHITE)
+                    _whiteQueen.value = Piece(PieceType.QUEEN, PieceColor.WHITE) // Ažuriraj StateFlow
                     placed = true
                 }
             }
@@ -229,239 +262,3 @@ class Game {
         return newBoard
     }
 }
-
-// --- EXTENSION FUNCTIONS (Mogu biti i u ChessDefinitions.kt ili u posebnom fajlu npr. ChessExtensions.kt) ---
-// Ove funkcije treba da budu na odgovarajućem mestu (kao top-level funkcije ili ekstenzije u ChessDefinitions.kt)
-
-// Moraju biti definisane van Game klase i u ChessDefinitions.kt ili drugom zajedničkom fajlu
-fun PieceType.getRawMoves(fromSquare: Square, pieceColor: PieceColor): List<Square> {
-    val moves = mutableListOf<Square>()
-    val (file, rank) = fromSquare
-
-    when (this) {
-        PieceType.PAWN -> {
-            val direction = if (pieceColor == PieceColor.WHITE) 1 else -1
-            val startRank = if (pieceColor == PieceColor.WHITE) 2 else 7
-
-            // Standardni potez napred (bez hvatanja)
-            if (rank + direction in 1..8) {
-                // Za pešaka, getRawMoves bi trebalo da vrati samo "putanje"
-                // Validacija da li je polje prazno ili zauzeto protivničkom figurom radi se u makeMove/getLegalMoves
-                moves.add(Square(file, rank + direction))
-            }
-            // Dupli potez sa početne pozicije
-            if (rank == startRank && rank + 2 * direction in 1..8) {
-                moves.add(Square(file, rank + 2 * direction))
-            }
-            // Dijagonalni potezi (hvatanje) - pešak se drugačije hvata od ostalih figura
-            // Ovi potezi su uvek "sirovi", provera da li je figura na tom polju radi se kasnije
-            if (file - 1 >= 'a' && rank + direction in 1..8) {
-                moves.add(Square(file - 1, rank + direction))
-            }
-            if (file + 1 <= 'h' && rank + direction in 1..8) {
-                moves.add(Square(file + 1, rank + direction))
-            }
-        }
-        PieceType.KNIGHT -> {
-            val knightMoves = listOf(
-                Pair(1, 2), Pair(1, -2), Pair(-1, 2), Pair(-1, -2),
-                Pair(2, 1), Pair(2, -1), Pair(-2, 1), Pair(-2, -1)
-            )
-            for ((df, dr) in knightMoves) {
-                val newFile = file + df
-                val newRank = rank + dr
-                if (newFile in 'a'..'h' && newRank in 1..8) {
-                    moves.add(Square(newFile, newRank))
-                }
-            }
-        }
-        PieceType.BISHOP -> {
-            // Dijagonalni potezi
-            for (i in 1..7) { // Gore-desno
-                if (file + i <= 'h' && rank + i <= 8) moves.add(Square(file + i, rank + i))
-            }
-            for (i in 1..7) { // Dole-desno
-                if (file + i <= 'h' && rank - i >= 1) moves.add(Square(file + i, rank - i))
-            }
-            for (i in 1..7) { // Gore-levo
-                if (file - i >= 'a' && rank + i <= 8) moves.add(Square(file - i, rank + i))
-            }
-            for (i in 1..7) { // Dole-levo
-                if (file - i >= 'a' && rank - i >= 1) moves.add(Square(file - i, rank - i))
-            }
-        }
-        PieceType.ROOK -> {
-            // Horizontalni i vertikalni potezi
-            for (fChar in 'a'..'h') { // Horizontalno
-                if (fChar != file) moves.add(Square(fChar, rank))
-            }
-            for (r in 1..8) { // Vertikalno
-                if (r != rank) moves.add(Square(file, r))
-            }
-        }
-        PieceType.QUEEN -> {
-            // Kombinacija topa i lovca (horizontalni, vertikalni, dijagonalni)
-            for (fChar in 'a'..'h') {
-                if (fChar != file) moves.add(Square(fChar, rank))
-            }
-            for (r in 1..8) {
-                if (r != rank) moves.add(Square(file, r))
-            }
-            for (i in 1..7) { // Dijagonalno (Gore-desno)
-                if (file + i <= 'h' && rank + i <= 8) moves.add(Square(file + i, rank + i))
-            }
-            for (i in 1..7) { // Dijagonalno (Dole-desno)
-                if (file + i <= 'h' && rank - i >= 1) moves.add(Square(file + i, rank - i))
-            }
-            for (i in 1..7) { // Dijagonalno (Gore-levo)
-                if (file - i >= 'a' && rank + i <= 8) moves.add(Square(file - i, rank + i))
-            }
-            for (i in 1..7) { // Dijagonalno (Dole-levo)
-                if (file - i >= 'a' && rank - i >= 1) moves.add(Square(file - i, rank - i))
-            }
-        }
-        PieceType.KING -> {
-            // Potezi u svim pravcima za 1 polje
-            for (df in -1..1) {
-                for (dr in -1..1) {
-                    if (df == 0 && dr == 0) continue
-                    val newFile = file + df
-                    val newRank = rank + dr
-                    if (newFile in 'a'..'h' && newRank in 1..8) {
-                        moves.add(Square(newFile, newRank))
-                    }
-                }
-            }
-        }
-        PieceType.NONE -> { /* No moves */ }
-    }
-    return moves
-}
-
-fun PieceType.isSlidingPiece(): Boolean {
-    return this == PieceType.QUEEN || this == PieceType.ROOK || this == PieceType.BISHOP
-}
-
-fun ChessBoard.isPathClear(from: Square, to: Square): Boolean {
-    val (fromFile, fromRank) = from
-    val (toFile, toRank) = to
-
-    // Provera horizontalne putanje
-    if (fromRank == toRank) {
-        val fileStep = if (toFile > fromFile) 1 else -1
-        var currentFile = fromFile + fileStep
-        while (currentFile != toFile) {
-            if (getPiece(Square(currentFile, fromRank)).type != PieceType.NONE) {
-                return false
-            }
-            currentFile += fileStep
-        }
-    }
-    // Provera vertikalne putanje
-    else if (fromFile == toFile) {
-        val rankStep = if (toRank > fromRank) 1 else -1
-        var currentRank = fromRank + rankStep
-        while (currentRank != toRank) {
-            if (getPiece(Square(fromFile, currentRank)).type != PieceType.NONE) {
-                return false
-            }
-            currentRank += rankStep
-        }
-    }
-    // Provera dijagonalne putanje
-    else if (kotlin.math.abs(fromFile.code - toFile.code) == kotlin.math.abs(fromRank - toRank)) {
-        val fileStep = if (toFile > fromFile) 1 else -1
-        val rankStep = if (toRank > fromRank) 1 else -1
-        var currentFile = fromFile + fileStep
-        var currentRank = fromRank + rankStep
-        while (currentFile.toChar() != toFile || currentRank != toRank) { // Prilagođeno za char file
-            if (getPiece(Square(currentFile.toChar(), currentRank)).type != PieceType.NONE) {
-                return false
-            }
-            currentFile += fileStep
-            currentRank += rankStep
-        }
-    }
-    return true
-}
-
-fun ChessBoard.isSquareAttackedByAnyOpponent(square: Square, myColor: PieceColor): Pair<Square, Piece>? {
-    val opponentColor = if (myColor == PieceColor.WHITE) PieceColor.BLACK else PieceColor.WHITE
-    for (rankIndex in 0 until BOARD_SIZE) {
-        for (fileIndex in 0 until BOARD_SIZE) {
-            val attackerSquare = Square.fromCoordinates(fileIndex, rankIndex)
-            val attackerPiece = this.getPiece(attackerSquare)
-
-            if (attackerPiece.color == opponentColor && attackerPiece.type != PieceType.NONE) {
-                val rawMoves = attackerPiece.type.getRawMoves(attackerSquare, attackerPiece.color)
-                if (rawMoves.contains(square)) {
-                    if (attackerPiece.type.isSlidingPiece()) {
-                        if (this.isPathClear(attackerSquare, square)) {
-                            return Pair(attackerSquare, attackerPiece)
-                        }
-                    } else {
-                        // Za nelinearne figure (konj, kralj, pešak), putanja nije bitna
-                        // Bitno je samo da se nalazi u listi "raw" poteza
-                        // Pesački napad je poseban - dijagonalno, ne pravo napred
-                        if (attackerPiece.type == PieceType.PAWN) {
-                            val pawnAttackMoves = if (attackerPiece.color == PieceColor.WHITE) {
-                                listOf(Square(attackerSquare.file + 1, attackerSquare.rank + 1), Square(attackerSquare.file - 1, attackerSquare.rank + 1))
-                            } else {
-                                listOf(Square(attackerSquare.file + 1, attackerSquare.rank - 1), Square(attackerSquare.file - 1, attackerSquare.rank - 1))
-                            }
-                            if (pawnAttackMoves.contains(square)) {
-                                return Pair(attackerSquare, attackerPiece)
-                            }
-                        } else {
-                            return Pair(attackerSquare, attackerPiece)
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return null
-}
-
-fun ChessBoard.isSquareAttacked(square: Square, attackingColor: PieceColor): Boolean {
-    for (rankIndex in 0 until BOARD_SIZE) {
-        for (fileIndex in 0 until BOARD_SIZE) {
-            val potentialAttackerSquare = Square.fromCoordinates(fileIndex, rankIndex)
-            val potentialAttackerPiece = this.getPiece(potentialAttackerSquare)
-
-            if (potentialAttackerPiece.color == attackingColor && potentialAttackerPiece.type != PieceType.NONE) {
-                val attackerMoves = potentialAttackerPiece.type.getRawMoves(potentialAttackerSquare, potentialAttackerPiece.color)
-
-                if (attackerMoves.contains(square)) {
-                    if (potentialAttackerPiece.type.isSlidingPiece()) {
-                        if (this.isPathClear(potentialAttackerSquare, square)) {
-                            return true
-                        }
-                    } else {
-                        // Za nelinearne figure (konj, kralj, pešak)
-                        // Pešački napad je specifičan: samo dijagonalno hvatanje
-                        if (potentialAttackerPiece.type == PieceType.PAWN) {
-                            val pawnAttackMoves = if (potentialAttackerPiece.color == PieceColor.WHITE) {
-                                listOf(Square(potentialAttackerSquare.file + 1, potentialAttackerSquare.rank + 1), Square(potentialAttackerSquare.file - 1, potentialAttackerSquare.rank + 1))
-                            } else {
-                                listOf(Square(potentialAttackerSquare.file + 1, potentialAttackerSquare.rank - 1), Square(potentialAttackerSquare.file - 1, potentialAttackerSquare.rank - 1))
-                            }
-                            if (pawnAttackMoves.contains(square)) {
-                                return true
-                            }
-                        } else {
-                            return true
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return false
-}
-
-// Data klasa za potez (ovo treba da bude u ChessDefinitions.kt)
-data class Move(val from: Square, val to: Square)
-
-// Menadžer zvuka (OVO JE UKLONJENO JER SE DUPLIRA SA SoundManager.kt)
-// object SoundManager { ... }

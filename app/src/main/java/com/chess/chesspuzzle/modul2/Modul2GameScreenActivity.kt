@@ -1,4 +1,3 @@
-// Modul2GameScreenActivity.kt
 package com.chess.chesspuzzle.modul2
 
 import kotlinx.coroutines.launch
@@ -26,7 +25,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.* // Importuj sve iz glavnog paketa (ChessDefinitions.kt, Game.kt, ChessBoardUI.kt itd.)
-// NE TREBA nam kotlin.random.Random ovde jer ga PositionGenerator sada sam koristi interno
 
 // Uvoz za PositionGenerator
 import com.chess.chesspuzzle.modul2.PositionGenerator // Importuj tvoju novu PositionGenerator klasu
@@ -57,11 +55,6 @@ class Modul2GameScreenActivity : ComponentActivity() {
         val modul2MaxOpponents = intent.getIntExtra("modul2MaxOpponents", 5)
 
         val modul2OpponentTypes = modul2OpponentTypesNames?.map { PieceType.valueOf(it) } ?: emptyList()
-        // NAPOMENA: modul2OpponentTypes, modul2MinOpponents, modul2MaxOpponents se VIŠE NE KORISTE
-        // direktno za generisanje table u `generateInitialBoardForModul2`.
-        // Umesto toga, koristićemo ih za prosleđivanje željenog broja figura PositionGeneratoru.
-        // Ali tvoj originalni generator uzima TAČAN BROJ SVAKE FIGURE.
-        // Stoga ćemo morati da pretpostavimo željene brojeve na osnovu težine.
 
         Log.d("Modul2GameScreenActivity", "Starting Modul 2 game for player: $playerName, Difficulty: $difficulty")
 
@@ -71,45 +64,68 @@ class Modul2GameScreenActivity : ComponentActivity() {
         try {
             // Prilagodi ove brojeve figura prema tvojoj logici težine i željenim tipovima
             // Primer prilagođavanja za `generatePuzzle` parametre:
-            val numBishops = when (difficulty) {
-                Difficulty.EASY -> 0
-                Difficulty.MEDIUM -> if (modul2OpponentTypes.contains(PieceType.BISHOP)) 1 else 0
-                Difficulty.HARD -> if (modul2OpponentTypes.contains(PieceType.BISHOP)) 2 else 0
-            }.coerceAtMost(modul2MaxOpponents.coerceAtMost(2)) // Osiguraj da ne prelazi max figuru i max 2 lovca
 
-            val numRooks = when (difficulty) {
-                Difficulty.EASY -> 0
-                Difficulty.MEDIUM -> if (modul2OpponentTypes.contains(PieceType.ROOK)) 1 else 0
-                Difficulty.HARD -> if (modul2OpponentTypes.contains(PieceType.ROOK)) 2 else 0
-            }.coerceAtMost(modul2MaxOpponents.coerceAtMost(2)) // Osiguraj da ne prelazi max figuru i max 2 topa
+            var numBishops = 0
+            var numRooks = 0
+            var numKnights = 0
+            var numPawns = 0
 
-            val numKnights = when (difficulty) {
-                Difficulty.EASY -> if (modul2OpponentTypes.contains(PieceType.KNIGHT)) 1 else 0
-                Difficulty.MEDIUM -> if (modul2OpponentTypes.contains(PieceType.KNIGHT)) 2 else 1
-                Difficulty.HARD -> if (modul2OpponentTypes.contains(PieceType.KNIGHT)) 2 else 1
-            }.coerceAtMost(modul2MaxOpponents.coerceAtMost(2)) // Osiguraj da ne prelazi max figuru i max 2 skakača
-
-            val numPawns = when (difficulty) {
-                Difficulty.EASY -> if (modul2OpponentTypes.contains(PieceType.PAWN)) 2 else 0
-                Difficulty.MEDIUM -> if (modul2OpponentTypes.contains(PieceType.PAWN)) 3 else 0
-                Difficulty.HARD -> if (modul2OpponentTypes.contains(PieceType.PAWN)) 4 else 0
-            }.coerceAtMost(modul2MaxOpponents.coerceAtMost(8)) // Osiguraj da ne prelazi max figuru i max 8 pešaka
-
-            // Podesi ukupan broj figura tako da bude unutar željenog opsega
-            var actualTotalBlackPieces = numBishops + numRooks + numKnights + numPawns
-            if (actualTotalBlackPieces < modul2MinOpponents) {
-                // Ako je ukupan broj figura manji od minimalnog, dodaj pešake dok ne dostigne minimum
-                // ili dok ne dosegne modul2MaxOpponents / 8 pešaka
-                val pawnsToAdd = (modul2MinOpponents - actualTotalBlackPieces).coerceAtMost(8 - numPawns)
-                numPawns.plus(pawnsToAdd)
-                actualTotalBlackPieces += pawnsToAdd
-            }
-            if (actualTotalBlackPieces > modul2MaxOpponents) {
-                // Ako je ukupan broj figura veći od maksimalnog, pokušaj smanjiti (od pešaka naniže)
-                // Ovo je kompleksnije, ali za sada ćemo se oslanjati na 'coerceAtMost' iznad
-                Log.w(TAG, "Generated black pieces count (${actualTotalBlackPieces}) exceeds modul2MaxOpponents (${modul2MaxOpponents}).")
+            // Početna raspodela figura na osnovu težine i dozvoljenih tipova
+            when (difficulty) {
+                Difficulty.EASY -> {
+                    if (modul2OpponentTypes.contains(PieceType.PAWN)) numPawns = 2
+                    if (modul2OpponentTypes.contains(PieceType.KNIGHT)) numKnights = 1
+                }
+                Difficulty.MEDIUM -> {
+                    if (modul2OpponentTypes.contains(PieceType.PAWN)) numPawns = 3
+                    if (modul2OpponentTypes.contains(PieceType.KNIGHT)) numKnights = 1
+                    if (modul2OpponentTypes.contains(PieceType.BISHOP)) numBishops = 1
+                    if (modul2OpponentTypes.contains(PieceType.ROOK)) numRooks = 1
+                }
+                Difficulty.HARD -> {
+                    if (modul2OpponentTypes.contains(PieceType.PAWN)) numPawns = 4
+                    if (modul2OpponentTypes.contains(PieceType.KNIGHT)) numKnights = 2
+                    if (modul2OpponentTypes.contains(PieceType.BISHOP)) numBishops = 2
+                    if (modul2OpponentTypes.contains(PieceType.ROOK)) numRooks = 2
+                }
             }
 
+            // Ograničenja broja figura (max 2 za topove/lovce/skakače, max 8 za pešake)
+            numBishops = numBishops.coerceAtMost(2)
+            numRooks = numRooks.coerceAtMost(2)
+            numKnights = numKnights.coerceAtMost(2)
+            numPawns = numPawns.coerceAtMost(8)
+
+            // Prilagođavanje ukupnog broja figura prema modul2MinOpponents i modul2MaxOpponents
+            var currentTotalBlackPieces = numBishops + numRooks + numKnights + numPawns
+
+            // Ako je ukupan broj figura manji od minimalnog, dodaj pešake
+            while (currentTotalBlackPieces < modul2MinOpponents && numPawns < 8) {
+                numPawns++
+                currentTotalBlackPieces++
+            }
+
+            // Ako je ukupan broj figura veći od maksimalnog, pokušaj smanjiti (od pešaka, pa naviše)
+            // Ova logika smanjivanja može biti kompleksna za implementaciju, za sada se oslanjamo
+            // na to da će generator automatski preskočiti pozicije sa previše figura
+            // (zbog maxAttempts ograničenja) ili da coerceAtMost to već rešava.
+            // Ako je broj i dalje previsok, PositionGenerator će baciti RuntimeException.
+            while (currentTotalBlackPieces > modul2MaxOpponents) {
+                if (numPawns > 0) {
+                    numPawns--
+                } else if (numKnights > 0) {
+                    numKnights--
+                } else if (numBishops > 0) {
+                    numBishops--
+                } else if (numRooks > 0) {
+                    numRooks--
+                } else {
+                    break // Nema više figura za uklanjanje
+                }
+                currentTotalBlackPieces--
+            }
+
+            Log.d(TAG, "Attempting to generate puzzle with: B=$numBishops, R=$numRooks, N=$numKnights, P=$numPawns")
 
             val generatedPuzzle = positionGenerator.generatePuzzle(
                 numBlackBishops = numBishops,
@@ -119,6 +135,8 @@ class Modul2GameScreenActivity : ComponentActivity() {
             )
             game.initializeGame(generatedPuzzle.initialBoard)
             game.setModul2Mode(true)
+            // Logiku za učitavanje solutionPath u Game klasu ćemo dodati kasnije,
+            // kada budemo implementirali proveru poteza korisnika naspram rešenja.
         } catch (e: Exception) {
             Log.e("Modul2GameScreenActivity", "Greška pri generisanju zagonetke: ${e.message}", e)
             Toast.makeText(this, "Greška pri generisanju zagonetke: ${e.message}. Molimo pokušajte ponovo.", Toast.LENGTH_LONG).show()
@@ -333,7 +351,7 @@ fun Modul2GameScreen(
             selectedSquare = selectedSquare,
             highlightedMoves = highlightedMoves,
             // Last attacker square se i dalje prosleđuje kao Pair, pa ga konvertujemo u Square
-            lastAttackerSquare = lastAttackerPosition?.let { (rankIndex, fileIndex) -> Square.fromCoordinates(fileIndex, rankIndex) }
+            lastAttackerSquare = lastAttackerPosition?.let { (fileIndex, rankIndex) -> Square.fromCoordinates(fileIndex, rankIndex) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
