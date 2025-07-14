@@ -1,7 +1,9 @@
-package com.chess.chesspuzzle
+package com.chess.chesspuzzle.modul1
 
 import android.content.Context
 import android.util.Log
+import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.Square
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.InputStream
@@ -101,7 +103,8 @@ object PuzzleLoader {
                 }
 
                 // KLJUČNA IZMENA: Koristi imenovane argumente i dodaj name i creationDate
-                puzzles.add(ChessProblem(
+                puzzles.add(
+                    ChessProblem(
                     id = id, // Sada je String
                     name = puzzleName, // Novo polje
                     difficulty = difficulty,
@@ -112,7 +115,8 @@ object PuzzleLoader {
                     capturesByPiece = capturesByPiece,
                     solutionMoves = solutionMoves,
                     creationDate = creationDate // Novo polje
-                ))
+                )
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "Greška pri parsiranju JSON sadržaja iz fajla '$fileName': ${e.message}", e)

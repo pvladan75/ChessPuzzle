@@ -29,25 +29,25 @@
             android:label="Izbor Težine"
             android:theme="@style/Theme.ChessPuzzle" />
         <activity
-            android:name=".GameActivity"
+            android:name=".modul1.GameActivity"
             android:exported="false"
             android:label="Šahovska Igra"
             android:theme="@style/Theme.ChessPuzzle" />
         <activity
-            android:name=".FigureSelectionActivity"
+            android:name=".modul1.FigureSelectionActivity"
             android:exported="false"
             android:label="FigureSelectionActivity"
             android:theme="@style/Theme.ChessPuzzle" />
         <activity
-            android:name=".HighScoresActivity"
+            android:name=".modul1.HighScoresActivity"
             android:exported="false"
             android:label="Najbolji Rezultati"
             android:theme="@style/Theme.ChessPuzzle" />
         <activity
-            android:name=".SolutionDisplayActivity"
+            android:name=".modul1.SolutionDisplayActivity"
             android:exported="false" />
         <activity
-            android:name=".PositionCreationActivity"
+            android:name=".modul1.PositionCreationActivity"
             android:exported="false" android:label="Kreiranje pozicije"
             android:theme="@style/Theme.ChessPuzzle"
             >

@@ -35,6 +35,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import com.chess.chesspuzzle.modul1.FigureSelectionActivity
+import com.chess.chesspuzzle.modul1.HighScoresActivity
+import com.chess.chesspuzzle.modul1.SolutionDisplayActivity
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -1,4 +1,4 @@
-package com.chess.chesspuzzle
+package com.chess.chesspuzzle.modul1
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -17,6 +17,9 @@ import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
 import kotlinx.coroutines.delay
 import android.util.Log
 import androidx.compose.ui.platform.LocalContext // <-- OSTAVLJAMO OVAJ IMPORT
+import com.chess.chesspuzzle.ChessBoard
+import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.Square
 import java.lang.Exception
 
 // Klasa ChessSolution se očekuje da je definisana globalno,

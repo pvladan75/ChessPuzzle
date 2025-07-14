@@ -1,4 +1,4 @@
-package com.chess.chesspuzzle
+package com.chess.chesspuzzle.modul1
 
 import android.content.Context
 import android.os.Bundle
@@ -20,9 +20,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.chess.chesspuzzle.ChessBoard
+import com.chess.chesspuzzle.Piece
+import com.chess.chesspuzzle.PieceColor
+import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.ScoreEntry
+import com.chess.chesspuzzle.ScoreManager
+import com.chess.chesspuzzle.SoundManager
+import com.chess.chesspuzzle.Square
 import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
-import com.chess.chesspuzzle.logic.checkGameStatusLogic
-import com.chess.chesspuzzle.logic.performMove
+import com.chess.chesspuzzle.modul1.logic.checkGameStatusLogic
+import com.chess.chesspuzzle.modul1.logic.performMove
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -613,7 +621,11 @@ fun ChessGameScreen(
                                     val nextBoard = board.makeMoveAndCapture(firstMove.fromSquare, firstMove.toSquare)
                                     board = nextBoard
                                     selectedSquareState.value = firstMove.toSquare
-                                    val updatedLegalMoves = ChessCore.getValidMoves(nextBoard, nextBoard.getPiece(firstMove.toSquare), firstMove.toSquare)
+                                    val updatedLegalMoves = ChessCore.getValidMoves(
+                                        nextBoard,
+                                        nextBoard.getPiece(firstMove.toSquare),
+                                        firstMove.toSquare
+                                    )
                                     highlightedSquaresState.value = updatedLegalMoves.toSet()
                                 } else {
                                     Log.w("GameActivity", "Solver nije pronašao rešenje za ovu poziciju.")
@@ -640,7 +652,11 @@ fun ChessGameScreen(
                             val nextBoard = board.makeMoveAndCapture(nextMove.fromSquare, nextMove.toSquare)
                             board = nextBoard
                             selectedSquareState.value = nextMove.toSquare
-                            val updatedLegalMoves = ChessCore.getValidMoves(nextBoard, nextBoard.getPiece(nextMove.toSquare), nextMove.toSquare)
+                            val updatedLegalMoves = ChessCore.getValidMoves(
+                                nextBoard,
+                                nextBoard.getPiece(nextMove.toSquare),
+                                nextMove.toSquare
+                            )
                             highlightedSquaresState.value = updatedLegalMoves.toSet()
                         } else {
                             isSolutionDisplaying = false

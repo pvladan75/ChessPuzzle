@@ -1,4 +1,4 @@
-package com.chess.chesspuzzle // Prilagodi paketu svoje aplikacije
+package com.chess.chesspuzzle.modul1 // Prilagodi paketu svoje aplikacije
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.ChessBoard
 import com.chess.chesspuzzle.PieceColor
 import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.R
 import com.chess.chesspuzzle.Square
 
 /**

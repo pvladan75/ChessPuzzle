@@ -1,7 +1,8 @@
-package com.chess.chesspuzzle
+package com.chess.chesspuzzle.modul1
 
 import java.util.UUID
-import android.util.Log
+import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.Square
 
 data class SolutionMove(
     val moverPiece: PieceType,

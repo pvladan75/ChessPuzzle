@@ -1,14 +1,12 @@
-package com.chess.chesspuzzle.logic
+package com.chess.chesspuzzle.modul1.logic
 
 import android.util.Log
 import com.chess.chesspuzzle.ChessBoard
-import com.chess.chesspuzzle.ChessCore
-import com.chess.chesspuzzle.Difficulty
-import com.chess.chesspuzzle.GameStatusResult
+import com.chess.chesspuzzle.modul1.ChessCore
+import com.chess.chesspuzzle.modul1.Difficulty
+import com.chess.chesspuzzle.modul1.GameStatusResult
 import com.chess.chesspuzzle.Piece
 import com.chess.chesspuzzle.PieceColor
-import com.chess.chesspuzzle.ScoreEntry
-import com.chess.chesspuzzle.ScoreManager // I dalje ga importujemo ako ga koristimo negde drugde u ovom paketu
 import com.chess.chesspuzzle.Square
 import com.chess.chesspuzzle.PieceType
 import kotlinx.coroutines.Dispatchers

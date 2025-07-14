@@ -1,6 +1,11 @@
-package com.chess.chesspuzzle
+package com.chess.chesspuzzle.modul1
 
 import android.util.Log
+import com.chess.chesspuzzle.ChessBoard
+import com.chess.chesspuzzle.Piece
+import com.chess.chesspuzzle.PieceColor
+import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.Square
 import java.util.LinkedList
 
 object ChessCore {

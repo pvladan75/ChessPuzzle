@@ -1,7 +1,11 @@
-package com.chess.chesspuzzle
+package com.chess.chesspuzzle.modul1
 
-import android.content.Context
 import android.util.Log
+import com.chess.chesspuzzle.ChessBoard
+import com.chess.chesspuzzle.Piece
+import com.chess.chesspuzzle.PieceColor
+import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.Square
 import kotlin.random.Random
 
 object TrainingPuzzleManager {

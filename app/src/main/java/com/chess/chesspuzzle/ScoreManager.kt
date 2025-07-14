@@ -3,6 +3,7 @@ package com.chess.chesspuzzle
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.chess.chesspuzzle.modul1.Difficulty
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 // Uklonjen import Date jer se ScoreEntry ne deklariše ovde (to je pretpostavka, ako ga imaš drugde, ostavi ga)

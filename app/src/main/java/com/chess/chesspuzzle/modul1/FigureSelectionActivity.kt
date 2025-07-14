@@ -1,4 +1,4 @@
-package com.chess.chesspuzzle
+package com.chess.chesspuzzle.modul1
 
 import android.content.Intent
 import android.os.Bundle
@@ -17,7 +17,6 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,6 +26,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.R
+import com.chess.chesspuzzle.SoundManager
 import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
 import java.util.Locale
 
@@ -114,7 +116,9 @@ fun FigureSelectionScreen(playerName: String) {
                             isTrainingMode = true
                             selectedFigures.clear() // Resetuj odabrane figure pri promeni moda
                             // Ako je TEZAK nivo izabran, a igrac prebaci na TRAINING, ukloni damu iz selekcije ako je bila odabrana
-                            if (selectedDifficulty == Difficulty.HARD && selectedFigures.contains(PieceType.QUEEN)) {
+                            if (selectedDifficulty == Difficulty.HARD && selectedFigures.contains(
+                                    PieceType.QUEEN
+                                )) {
                                 selectedFigures.remove(PieceType.QUEEN)
                             }
                         },

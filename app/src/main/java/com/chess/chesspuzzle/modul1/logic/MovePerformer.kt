@@ -1,10 +1,10 @@
-package com.chess.chesspuzzle.logic
+package com.chess.chesspuzzle.modul1.logic
 
 import android.util.Log
 import com.chess.chesspuzzle.ChessBoard
-import com.chess.chesspuzzle.ChessSolver // Ostaje ako se ChessSolver.MoveData koristi drugde
-import com.chess.chesspuzzle.Difficulty
-import com.chess.chesspuzzle.GameStatusResult
+import com.chess.chesspuzzle.modul1.Difficulty
+import com.chess.chesspuzzle.PieceColor
+import com.chess.chesspuzzle.modul1.GameStatusResult
 import com.chess.chesspuzzle.Square
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -30,7 +30,7 @@ suspend fun performMove(
         // U slučaju greške, vratićemo defaultni GameStatusResult ili odgovarajuću grešku
         // Za sada, vraćamo GameStatusResult koji signalizira da se ništa nije promenilo
         return@withContext GameStatusResult(
-            updatedBlackPieces = currentBoard.getPiecesMapFromBoard(com.chess.chesspuzzle.PieceColor.BLACK),
+            updatedBlackPieces = currentBoard.getPiecesMapFromBoard(PieceColor.BLACK),
             puzzleCompleted = false,
             noMoreMoves = false,
             solvedPuzzlesCountIncrement = 0,

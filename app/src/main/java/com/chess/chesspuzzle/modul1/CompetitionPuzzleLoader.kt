@@ -1,8 +1,10 @@
-package com.chess.chesspuzzle
+package com.chess.chesspuzzle.modul1
 
 import android.content.Context
 import android.util.Log
-import com.google.gson.Gson
+import com.chess.chesspuzzle.ChessBoard
+import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.PieceTypeDeserializer
 import com.google.gson.GsonBuilder // DODATO ZA REGISTRACIJU CUSTOM DESERIALIZERA
 import com.google.gson.reflect.TypeToken
 import java.io.InputStreamReader

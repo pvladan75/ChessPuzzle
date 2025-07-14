@@ -1,14 +1,15 @@
-package com.chess.chesspuzzle
+package com.chess.chesspuzzle.modul1
 
 import android.content.Context
 import android.util.Log
+import com.chess.chesspuzzle.Square
+import com.chess.chesspuzzle.SquareAdapter
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import java.io.File
 import java.io.IOException
 import java.io.FileNotFoundException
-import java.util.UUID // Dodao import za UUID
 
 // Singleton objekat za rukovanje JSON fajlovima korisničkih zagonetki
 object PuzzleDataHandler {

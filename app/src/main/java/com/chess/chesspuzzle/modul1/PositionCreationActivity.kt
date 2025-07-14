@@ -1,24 +1,25 @@
-package com.chess.chesspuzzle
+package com.chess.chesspuzzle.modul1
 
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.* // Uključuje SnackbarHostState, AlertDialog, DropdownMenu, FilterChip, ExposedDropdownMenuBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.chess.chesspuzzle.ChessBoard
+import com.chess.chesspuzzle.Piece
+import com.chess.chesspuzzle.PieceColor
+import com.chess.chesspuzzle.PieceType
+import com.chess.chesspuzzle.Square
 import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
 import kotlinx.coroutines.launch
-import java.util.UUID // Dodao import za UUID
 
 // Enum za tip figura koje korisnik može da postavlja
 // Ostavljamo ga ovde ako ga ne koristimo na drugom mestu
@@ -278,10 +279,12 @@ fun PositionCreationScreen(playerName: String) {
                         existingPuzzleFiles = PuzzleDataHandler.getListOfUserPuzzleFiles(context)
                         if (existingPuzzleFiles.isNotEmpty()) {
                             selectedExistingFileName = existingPuzzleFiles.first()
-                            selectedSaveOption = SaveFileOption.EXISTING_FILE // Podrazumevano odaberi postojeći ako ih ima
+                            selectedSaveOption =
+                                SaveFileOption.EXISTING_FILE // Podrazumevano odaberi postojeći ako ih ima
                         } else {
                             selectedExistingFileName = null
-                            selectedSaveOption = SaveFileOption.NEW_FILE // Ako nema fajlova, uvek idi na novi
+                            selectedSaveOption =
+                                SaveFileOption.NEW_FILE // Ako nema fajlova, uvek idi na novi
                         }
                         showSavePuzzleDialog = true
                     }
@@ -452,7 +455,10 @@ fun PositionCreationScreen(playerName: String) {
                     coroutineScope.launch {
                         try {
                             // Učitaj postojeće zagonetke iz ciljanog fajla
-                            val existingPuzzles = PuzzleDataHandler.loadUserPuzzles(context, targetFileName).toMutableList()
+                            val existingPuzzles = PuzzleDataHandler.loadUserPuzzles(
+                                context,
+                                targetFileName
+                            ).toMutableList()
 
                             // Kreiraj novi ChessProblem objekat
                             val newPuzzle = ChessProblem(
@@ -494,7 +500,11 @@ fun PositionCreationScreen(playerName: String) {
                             }
 
                             // Sačuvaj ažuriranu listu
-                            PuzzleDataHandler.saveUserPuzzles(context, targetFileName, existingPuzzles)
+                            PuzzleDataHandler.saveUserPuzzles(
+                                context,
+                                targetFileName,
+                                existingPuzzles
+                            )
 
                         } catch (e: Exception) {
                             Log.e("PositionCreation", "Greška pri čuvanju zagonetke: ${e.message}", e)
