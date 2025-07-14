@@ -65,11 +65,6 @@ fun FigureSelectionScreen(playerName: String) {
 
     var isTrainingMode by remember { mutableStateOf(true) }
 
-    // Inicijalizacija PositionGeneratora NIJE POTREBNA ovde ako se ne koristi za generisanje FEN-a
-    // Direktno iz ove aktivnosti. U vasem slucaju sam je uklonio jer je GameActivity sada zaduzen za generisanje.
-    // val chessSolver = remember { ChessSolver() }
-    // val positionGenerator = remember { PositionGenerator(chessSolver) } // Uklonjeno
-
     val requiredFigures = remember {
         mapOf(
             Difficulty.EASY to (1 to 1),
@@ -118,6 +113,10 @@ fun FigureSelectionScreen(playerName: String) {
                         onClick = {
                             isTrainingMode = true
                             selectedFigures.clear() // Resetuj odabrane figure pri promeni moda
+                            // Ako je TEZAK nivo izabran, a igrac prebaci na TRAINING, ukloni damu iz selekcije ako je bila odabrana
+                            if (selectedDifficulty == Difficulty.HARD && selectedFigures.contains(PieceType.QUEEN)) {
+                                selectedFigures.remove(PieceType.QUEEN)
+                            }
                         },
                         role = Role.RadioButton
                     )
@@ -164,6 +163,9 @@ fun FigureSelectionScreen(playerName: String) {
                             onClick = {
                                 selectedDifficulty = difficulty
                                 selectedFigures.clear() // Resetuj odabrane figure pri promeni težine
+                                // Ako je novoodabrana tezina HARD, a prethodno je dama bila selektovana (sto se resetuje),
+                                // osiguraj da se ne pojavi u opcijama za odabir.
+                                // Nije direktno potrebno ovde jer se selectedFigures.clear() vec desava.
                             },
                             role = Role.RadioButton
                         )
@@ -183,7 +185,7 @@ fun FigureSelectionScreen(playerName: String) {
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(32.dp)) // ISPRAVLJENA LINIJA
 
         // Prikaz odabira figura samo ako je "Trening Mod" aktivan
         if (isTrainingMode) {
@@ -204,7 +206,13 @@ fun FigureSelectionScreen(playerName: String) {
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            val availableFigures = listOf(PieceType.KNIGHT, PieceType.ROOK, PieceType.BISHOP, PieceType.QUEEN)
+            // OVDE JE IZMENA: Filter za dostupne figure
+            val availableFigures = if (selectedDifficulty == Difficulty.HARD) {
+                listOf(PieceType.KNIGHT, PieceType.ROOK, PieceType.BISHOP) // Izbaci damu za težak nivo
+            } else {
+                listOf(PieceType.KNIGHT, PieceType.ROOK, PieceType.BISHOP, PieceType.QUEEN)
+            }
+
             Column {
                 availableFigures.chunked(2).forEach { rowFigures ->
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
@@ -215,13 +223,18 @@ fun FigureSelectionScreen(playerName: String) {
                                 modifier = Modifier
                                     .size(80.dp)
                                     .clickable {
-                                        if (isSelected) {
-                                            selectedFigures.remove(pieceType)
+                                        // Onemogući odabir dame ako je težak nivo
+                                        if (selectedDifficulty == Difficulty.HARD && pieceType == PieceType.QUEEN) {
+                                            Toast.makeText(context, "Dama nije dostupna za Težak nivo.", Toast.LENGTH_SHORT).show()
                                         } else {
-                                            if (selectedFigures.size < currentRequiredMaxWhiteFigures) {
-                                                selectedFigures.add(pieceType)
+                                            if (isSelected) {
+                                                selectedFigures.remove(pieceType)
                                             } else {
-                                                Toast.makeText(context, "Već ste odabrali maksimalan broj figura za ovaj nivo ($currentRequiredMaxWhiteFigures)!", Toast.LENGTH_SHORT).show()
+                                                if (selectedFigures.size < currentRequiredMaxWhiteFigures) {
+                                                    selectedFigures.add(pieceType)
+                                                } else {
+                                                    Toast.makeText(context, "Već ste odabrali maksimalan broj figura za ovaj nivo ($currentRequiredMaxWhiteFigures)!", Toast.LENGTH_SHORT).show()
+                                                }
                                             }
                                         }
                                     }

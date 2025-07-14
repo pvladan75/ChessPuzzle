@@ -1,6 +1,7 @@
 package com.chess.chesspuzzle
 
 import java.util.UUID
+import android.util.Log
 
 data class SolutionMove(
     val moverPiece: PieceType,
@@ -22,4 +23,10 @@ data class ChessProblem(
     val solutionMoves: List<SolutionMove>,
     // Novo: creationDate polje za timestamp
     val creationDate: Long = System.currentTimeMillis()
-)
+){
+// DODATA HASWHITEQUEEN() METODA
+fun hasWhiteQueen(): Boolean {
+    // Koristi PieceType.QUEEN za pristup mapi, jer je whitePiecesConfig tipa Map<PieceType, Int>
+    return whitePiecesConfig.getOrDefault(PieceType.QUEEN, 0) > 0
+}
+}
