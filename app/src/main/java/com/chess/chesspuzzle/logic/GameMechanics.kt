@@ -1,4 +1,3 @@
-// logic/GameMechanics.kt
 package com.chess.chesspuzzle.logic
 
 import android.util.Log
@@ -9,7 +8,7 @@ import com.chess.chesspuzzle.GameStatusResult
 import com.chess.chesspuzzle.Piece
 import com.chess.chesspuzzle.PieceColor
 import com.chess.chesspuzzle.ScoreEntry
-import com.chess.chesspuzzle.ScoreManager
+import com.chess.chesspuzzle.ScoreManager // I dalje ga importujemo ako ga koristimo negde drugde u ovom paketu
 import com.chess.chesspuzzle.Square
 import com.chess.chesspuzzle.PieceType
 import kotlinx.coroutines.Dispatchers
@@ -20,30 +19,27 @@ suspend fun checkGameStatusLogic(
     currentBoardSnapshot: ChessBoard,
     currentTimeElapsed: Int,
     currentDifficulty: Difficulty,
-    playerName: String,
-    currentSessionScore: Int
+    playerName: String, // playerName se i dalje prosleđuje, ali se ne koristi za ScoreManager.addScore ovde
+    currentSessionScore: Int // Ovo je akumulirani skor pre ove zagonetke
 ): GameStatusResult = withContext(Dispatchers.Default) {
     val updatedBlackPiecesMap = currentBoardSnapshot.getPiecesMapFromBoard(PieceColor.BLACK)
     var solvedPuzzlesCountIncrement = 0
     var scoreForPuzzle = 0
-    var newSessionScore = currentSessionScore
+    var newSessionScore = currentSessionScore // Inicijalizujemo sa prosleđenim akumuliranim skorom
     var puzzleCompleted = false
     var noMoreMoves = false
     var gameStarted = true
 
     if (updatedBlackPiecesMap.isEmpty()) {
+        // Ako su sve crne figure uhvaćene
         puzzleCompleted = true
         solvedPuzzlesCountIncrement = 1
         scoreForPuzzle = calculateScoreInternal(currentTimeElapsed, currentDifficulty)
-        newSessionScore += scoreForPuzzle
+        newSessionScore += scoreForPuzzle // Dodaj skor ove zagonetke na ukupan skor sesije
 
-        try {
-            ScoreManager.addScore(ScoreEntry(playerName, newSessionScore), currentDifficulty.name)
-            Log.d("GameMechanics", "Skor uspešno sačuvan (Zagonetka rešena). Trenutni skor: $newSessionScore")
-        } catch (e: Exception) {
-            Log.e("GameMechanics", "Greška pri čuvanju skora (Zagonetka rešena): ${e.message}", e)
-        }
-        gameStarted = false
+        // Uklonjeno: ScoreManager.addScore() se više ne poziva ovde!
+        Log.d("GameMechanics", "Zagonetka rešena. Skor za zagonetku: $scoreForPuzzle. Trenutni akumulirani skor sesije: $newSessionScore")
+        gameStarted = false // Igra se završava za ovu zagonetku
     } else {
         var canWhiteCaptureBlack = false
         val whitePiecesOnBoard = mutableMapOf<Square, Piece>()
@@ -57,31 +53,29 @@ suspend fun checkGameStatusLogic(
             }
         }
 
+        // Proveri da li bela ima bilo kakav legalan potez za hvatanje crne figure
         for ((whiteSquare, whitePiece) in whitePiecesOnBoard) {
             val legalMoves = ChessCore.getValidMoves(currentBoardSnapshot, whitePiece, whiteSquare)
             for (move in legalMoves) {
                 val pieceAtTarget = currentBoardSnapshot.getPiece(move)
                 if (pieceAtTarget.color == PieceColor.BLACK && pieceAtTarget.type != PieceType.NONE) {
                     canWhiteCaptureBlack = true
-                    break
+                    break // Pronađen je potez hvatanja, nema potrebe da se proverava dalje
                 }
             }
-            if (canWhiteCaptureBlack) break
+            if (canWhiteCaptureBlack) break // Pronađen je potez hvatanja, izađi iz spoljašnje petlje
         }
 
         if (!canWhiteCaptureBlack) {
+            // Nema više legalnih poteza za hvatanje crnih figura
             noMoreMoves = true
             gameStarted = false
-
-            try {
-                ScoreManager.addScore(ScoreEntry(playerName, newSessionScore), currentDifficulty.name)
-                Log.d("GameMechanics", "Skor uspešno sačuvan (Nema više poteza). Trenutni skor: $newSessionScore")
-            } catch (e: Exception) {
-                Log.e("GameMechanics", "Greška pri čuvanju skora (Nema više poteza): ${e.message}", e)
-            }
+            // Uklonjeno: ScoreManager.addScore() se više ne poziva ovde!
+            Log.d("GameMechanics", "Nema više legalnih poteza. Trenutni akumulirani skor sesije: $newSessionScore")
         }
     }
 
+    // VRATI AŽURIRANI SKOR SESIJE
     GameStatusResult(
         updatedBlackPieces = updatedBlackPiecesMap,
         puzzleCompleted = puzzleCompleted,
@@ -89,7 +83,7 @@ suspend fun checkGameStatusLogic(
         solvedPuzzlesCountIncrement = solvedPuzzlesCountIncrement,
         scoreForPuzzle = scoreForPuzzle,
         gameStarted = gameStarted,
-        newSessionScore = newSessionScore
+        newSessionScore = newSessionScore // Vraćamo ažurirani akumulirani skor
     )
 }
 

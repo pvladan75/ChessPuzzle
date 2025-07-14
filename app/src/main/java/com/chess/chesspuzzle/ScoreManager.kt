@@ -5,7 +5,17 @@ import android.content.SharedPreferences
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-// Uklonjen import Date jer se ScoreEntry ne deklariše ovde
+// Uklonjen import Date jer se ScoreEntry ne deklariše ovde (to je pretpostavka, ako ga imaš drugde, ostavi ga)
+
+/**
+ * Predstavlja jedan rezultat u tabeli sa rezultatima.
+ * Implementira Comparable interfejs kako bi se omogućilo sortiranje po skoru (opadajuće).
+ * @property playerName Ime igrača.
+ * @property score Postignuti skor.
+ * @property timestamp Vreme kada je rezultat postignut, u milisekundama.
+ */
+
+
 
 /**
  * Singleton objekat za upravljanje visokim skorovima (high scores) koristeći SharedPreferences.
@@ -32,7 +42,7 @@ object ScoreManager {
      * Dodaje novi rezultat za određeni nivo težine.
      * Rezultati se čuvaju sortirani opadajuće po skoru, i lista se ograničava na MAX_HIGH_SCORES.
      * @param newScoreEntry Objekat [ScoreEntry] koji se dodaje.
-     * @param difficulty String koji predstavlja nivo težine (npr. "Lako", "Srednje", "Teško").
+     * @param difficulty String koji predstavlja nivo težine (npr. "EASY", "MEDIUM", "HARD").
      */
     fun addScore(newScoreEntry: ScoreEntry, difficulty: String) {
         // Provera da li je sharedPreferences inicijalizovan
@@ -41,19 +51,19 @@ object ScoreManager {
             return
         }
 
-        val key = "${difficulty}_high_scores" // Ključ za SharedPreferences za ovu težinu
+        val key = "${difficulty.uppercase()}_high_scores" // Koristi uppercase za doslednost ključeva
         val json = sharedPreferences.getString(key, null)
         val type = object : TypeToken<MutableList<ScoreEntry>>() {}.type
 
         // Dohvati trenutne rezultate ili kreiraj novu praznu listu
         val currentScores: MutableList<ScoreEntry> = if (json != null) {
-            gson.fromJson(json, type) ?: mutableListOf() // Dodato ?: mutableListOf() za sigurnost
+            gson.fromJson(json, type) ?: mutableListOf()
         } else {
             mutableListOf()
         }
 
         currentScores.add(newScoreEntry)
-        currentScores.sortDescending() // Koristi Comparable definisan u ScoreEntry
+        currentScores.sortDescending() // Koristi Comparable definisan u ScoreEntry za sortiranje
 
         // Zadrži samo MAX_HIGH_SCORES najboljih rezultata
         val updatedScores = currentScores.take(MAX_HIGH_SCORES)
@@ -61,14 +71,14 @@ object ScoreManager {
         // Sačuvaj ažuriranu listu nazad u SharedPreferences
         val updatedJson = gson.toJson(updatedScores)
         sharedPreferences.edit().putString(key, updatedJson).apply()
-        Log.d("ScoreManager", "Score added for $difficulty: $newScoreEntry. Current scores: $updatedScores")
+        Log.d("ScoreManager", "Score added for $difficulty: $newScoreEntry. Updated top scores: $updatedScores")
     }
 
     /**
      * Dohvata listu najboljih rezultata za određeni nivo težine.
-     * Rezultati su već sortirani opadajuće po skoru (zbog Comparable implementacije).
+     * Rezultati su garantovano sortirani opadajuće po skoru.
      * @param difficulty String koji predstavlja nivo težine.
-     * @return List objekata [ScoreEntry] za dati nivo težine.
+     * @return List objekata [ScoreEntry] za dati nivo težine, sortirana opadajuće po skoru.
      */
     fun getHighScores(difficulty: String): List<ScoreEntry> {
         // Provera da li je sharedPreferences inicijalizovan
@@ -77,16 +87,19 @@ object ScoreManager {
             return emptyList()
         }
 
-        val key = "${difficulty}_high_scores"
+        val key = "${difficulty.uppercase()}_high_scores" // Koristi uppercase za doslednost ključeva
         val json = sharedPreferences.getString(key, null)
-        val type = object : TypeToken<List<ScoreEntry>>() {}.type // Koristi List umesto MutableList za povratni tip
+        val type = object : TypeToken<List<ScoreEntry>>() {}.type
 
-        // Vrati listu rezultata ili praznu listu
-        return if (json != null) {
-            gson.fromJson(json, type) ?: emptyList() // Dodato ?: emptyList() za sigurnost
+        // Dohvati listu rezultata ili praznu listu
+        val scores: List<ScoreEntry> = if (json != null) {
+            gson.fromJson(json, type) ?: emptyList()
         } else {
             emptyList()
         }
+
+        // KLJUČNA IZMENA: Osiguraj da je lista sortirana pre vraćanja
+        return scores.sortedByDescending { it.score }
     }
 
     /**
@@ -98,12 +111,11 @@ object ScoreManager {
             Log.e("ScoreManager", "ScoreManager nije inicijalizovan! Pozovite ScoreManager.init(context) pre upotrebe.")
             return
         }
-        //sharedPreferences.edit().clear().apply() // Ovo briše SVE, uključujući ostale preference
-        // Bolje je brisati samo high scores ključeve ako ih ima više
         val editor = sharedPreferences.edit()
-        val difficulties = listOf("Lako", "Srednje", "Teško")
+        // Pretpostavka je da koristite Difficulty.name (EASY, MEDIUM, HARD) kao string
+        val difficulties = Difficulty.entries.map { it.name } // Dohvati sve nazive iz Difficulty enuma
         difficulties.forEach { difficulty ->
-            editor.remove("${difficulty}_high_scores")
+            editor.remove("${difficulty.uppercase()}_high_scores")
         }
         editor.apply()
         Log.d("ScoreManager", "All ChessPuzzleHighScores cleared.")
