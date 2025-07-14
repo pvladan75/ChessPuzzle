@@ -48,6 +48,9 @@
             android:exported="false"
             android:label="Modul 2 Igra" />
         <activity
+            android:name=".SolverTestActivity"
+            android:exported="false" />
+        <activity
             android:name=".modul2.Modul2GameActivity"
             android:exported="false"
             android:label="Modul 2: Pomoć pri učenju" />

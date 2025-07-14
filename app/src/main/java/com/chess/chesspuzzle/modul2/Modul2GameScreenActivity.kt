@@ -28,6 +28,7 @@ import com.chess.chesspuzzle.* // Importuj sve iz glavnog paketa (ChessDefinitio
 
 // Uvoz za PositionGenerator
 import com.chess.chesspuzzle.modul2.PositionGenerator // Importuj tvoju novu PositionGenerator klasu
+import kotlin.random.Random // Importuj Kotlinov Random za nasumični izbor
 
 private val TAG = "Modul2GameScreenActivity"
 // Važna napomena: Difficulty enum mora biti definisan samo u ChessDefinitions.kt
@@ -118,9 +119,15 @@ class Modul2GameScreenActivity : ComponentActivity() {
                 currentTotalBlackPieces--
             }
 
-            Log.d(TAG, "Attempting to generate puzzle with: B=$numBishops, R=$numRooks, N=$numKnights, P=$numPawns")
+            // DODATA LOGIKA ZA ODABIR BELE FIGURE
+            val whitePieceOptions = listOf(PieceType.QUEEN, PieceType.ROOK, PieceType.KNIGHT)
+            val selectedWhitePieceType = whitePieceOptions.random(Random(System.currentTimeMillis())) // Koristimo Kotlinov Random
+            Log.d(TAG, "Selected white piece type for puzzle: $selectedWhitePieceType")
+
+            Log.d(TAG, "Attempting to generate puzzle with: White Piece=$selectedWhitePieceType, B=$numBishops, R=$numRooks, N=$numKnights, P=$numPawns")
 
             val generatedPuzzle = positionGenerator.generatePuzzle(
+                whitePieceType = selectedWhitePieceType, // PROSLEĐUJEMO ODABRANI TIP BELE FIGURE
                 numBlackBishops = numBishops,
                 numBlackRooks = numRooks,
                 numBlackKnights = numKnights,
@@ -128,13 +135,11 @@ class Modul2GameScreenActivity : ComponentActivity() {
             )
             game.initializeGame(generatedPuzzle.initialBoard)
             game.setModul2Mode(true)
-            // Logiku za učitavanje solutionPath u Game klasu ćemo dodati kasnije,
-            // kada budemo implementirali proveru poteza korisnika naspram rešenja.
         } catch (e: Exception) {
             Log.e(TAG, "Greška pri generisanju zagonetke: ${e.message}", e)
             Toast.makeText(this, "Greška pri generisanju zagonetke: ${e.message}. Molimo pokušajte ponovo.", Toast.LENGTH_LONG).show()
-            finish() // Završi aktivnost ako ne može da se generiše tabla
-            return // Važno: Prekini onCreate metod ako se javi greška
+            finish()
+            return
         }
         // ^^^^^^^^^^^^^^ KRAJ LOGIKE <<<<<<<<<<<<<<
 
@@ -207,7 +212,7 @@ fun Modul2GameScreen(
     val puzzleTime by game.puzzleTime.collectAsState()
 
     val context = LocalContext.current
-    val TAG = "Modul2GameScreen" // Dodat TAG za lakše logovanje
+    val TAG = "Modul2GameScreen"
 
     LaunchedEffect(puzzleSolved) {
         if (puzzleSolved) {
@@ -257,7 +262,6 @@ fun Modul2GameScreen(
                     val pieceOnClickedSquare = currentBoard.getPiece(clickedSquare)
 
                     if (selectedSquare == null) {
-                        // Sada proveravamo samo da li je figura bele boje i da nije prazno polje
                         if (pieceOnClickedSquare.color == PieceColor.WHITE && pieceOnClickedSquare.type != PieceType.NONE) {
                             selectedSquare = clickedSquare
                             highlightedMoves = game.getLegalMoves(clickedSquare)
@@ -270,7 +274,7 @@ fun Modul2GameScreen(
                         if (clickedSquare == selectedSquare) {
                             selectedSquare = null
                             highlightedMoves = emptyList()
-                            Log.d(TAG, "White piece deselected.") // Ažurirana poruka
+                            Log.d(TAG, "White piece deselected.")
                         } else {
                             val move = Move(selectedSquare!!, clickedSquare)
                             Log.d(TAG, "Attempting to make move from ${selectedSquare!!} to ${clickedSquare}.")
@@ -289,7 +293,6 @@ fun Modul2GameScreen(
             },
             selectedSquare = selectedSquare,
             highlightedMoves = highlightedMoves,
-            // Last attacker square se i dalje prosleđuje kao Pair, pa ga konvertujemo u Square
             lastAttackerSquare = lastAttackerPosition?.let { (fileIndex, rankIndex) -> Square.fromCoordinates(fileIndex, rankIndex) }
         )
 
@@ -368,17 +371,41 @@ fun Modul2GameScreen(
     }
 }
 
+// ... (sav prethodni kod u Modul2GameScreenActivity.kt ostaje isti do @Preview) ...
+
 @Preview(showBackground = true)
 @Composable
 fun Modul2GameScreenPreview() {
     val game = remember { Game() }
-    val initialBoard = ChessBoard.createEmpty()
-        // Sada možeš postaviti bilo koju belu figuru za preview
-        .setPiece(Piece(PieceType.ROOK, PieceColor.WHITE), Square.fromCoordinates(4, 3)) // e4
-        .setPiece(Piece(PieceType.PAWN, PieceColor.BLACK), Square.fromCoordinates(3, 4)) // d5
-        // ISPRAVLJENA LINIJA 379: Dodato 'PieceColor.' pre 'BLACK'
-        .setPiece(Piece(PieceType.KNIGHT, PieceColor.BLACK), Square.fromCoordinates(5, 5)) // f6
-    game.initializeGame(initialBoard)
+    val positionGenerator = remember { PositionGenerator() } // Instanciraj generator za Preview
+
+    // Generišemo dummy puzzle za preview, slično kao u onCreate
+    // Moramo definisati tip bele figure za preview
+    val whitePieceTypeForPreview = PieceType.QUEEN // Možeš odabrati QUEEN, ROOK, ili KNIGHT za preview
+    val numBlackBishops = 1
+    val numBlackRooks = 1
+    val numBlackKnights = 1
+    val numBlackPawns = 2
+
+    // Pozivamo generatePuzzle kao i u stvarnoj aktivnosti
+    val initialBoardForPreview = try {
+        positionGenerator.generatePuzzle(
+            whitePieceType = whitePieceTypeForPreview,
+            numBlackBishops = numBlackBishops,
+            numBlackRooks = numBlackRooks,
+            numBlackKnights = numBlackKnights,
+            numBlackPawns = numBlackPawns,
+            maxAttempts = 100 // Manje pokušaja za preview, jer ne mora biti savršeno rešivo
+        ).initialBoard
+    } catch (e: Exception) {
+        // U slučaju greške, vratite praznu ili defaultnu tablu za preview
+        Log.e("Preview", "Error generating puzzle for preview: ${e.message}")
+        ChessBoard.createEmpty()
+            .setPiece(Piece(PieceType.QUEEN, PieceColor.WHITE), Square.fromCoordinates(4, 3))
+            .setPiece(Piece(PieceType.PAWN, PieceColor.BLACK), Square.fromCoordinates(3, 4))
+    }
+
+    game.initializeGame(initialBoardForPreview) // Koristimo generisanu tablu
     game.setModul2Mode(true)
 
     com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme {

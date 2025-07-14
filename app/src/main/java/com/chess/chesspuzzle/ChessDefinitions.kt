@@ -15,7 +15,7 @@ enum class PieceType {
     KING,
     NONE;
 
-    // PREMEŠTENO OVDE: isSlidingPiece je sada metoda PieceType
+    // isSlidingPiece je metoda PieceType
     /**
      * Proverava da li je figura "klizeća" (dama, top, lovac).
      */
@@ -23,7 +23,7 @@ enum class PieceType {
         return this == QUEEN || this == ROOK || this == BISHOP
     }
 
-    // PREMEŠTENO OVDE: getRawMoves je sada metoda PieceType
+    // getRawMoves je metoda PieceType
     /**
      * Vraća listu "sirovih" (mogućih, bez provere da li ima figura na putu)
      * ciljnih polja za figuru sa datog početnog polja.
@@ -180,9 +180,6 @@ data class Piece(val type: PieceType, val color: PieceColor) {
         }
         return if (color == PieceColor.WHITE) char.uppercaseChar() else char
     }
-    // Obe fun isSlidingPiece i fun getRawMoves su premeštene iz Piece klase u PieceType enum,
-    // jer su logički vezane za TIP figure, a ne za boju/instancu.
-    // Dakle, nema ih više ovde!
 }
 
 data class ChessBoard(val pieces: Map<Square, Piece>) {
@@ -233,7 +230,6 @@ data class ChessBoard(val pieces: Map<Square, Piece>) {
         return ChessBoard(this.pieces.toMutableMap())
     }
 
-    // Funkcija makeMoveAndCapture je zadržana ali je `movePiece` preferiran za opšte poteze
     fun makeMoveAndCapture(from: Square, to: Square): ChessBoard {
         val newPieces = this.pieces.toMutableMap()
         val pieceToMove = newPieces[from] ?: return this
@@ -344,11 +340,10 @@ data class ChessBoard(val pieces: Map<Square, Piece>) {
                 })
                 row.append(" ")
             }
-            Log.d("ChessBoard", row.toString())
+            Log.d("ChessBoard", "  -----------------------")
+            Log.d("ChessBoard", "    a  b  c  d  e  f  g  h")
+            Log.d("ChessBoard", "-------------------------")
         }
-        Log.d("ChessBoard", "  -----------------------")
-        Log.d("ChessBoard", "    a  b  c  d  e  f  g  h")
-        Log.d("ChessBoard", "-------------------------")
     }
 
     /**
@@ -385,17 +380,20 @@ data class ChessBoard(val pieces: Map<Square, Piece>) {
     fun isSquareAttackedByAnyOpponent(targetSquare: Square, attackingColor: PieceColor): Pair<Square, Piece>? {
         val opponentColor = if (attackingColor == PieceColor.WHITE) PieceColor.BLACK else PieceColor.WHITE
 
+        // Pomoćna funkcija za proveru da li su koordinate unutar table
+        fun isValidCoordinate(fileIndex: Int, rankIndex: Int): Boolean {
+            return fileIndex in 0 until BOARD_SIZE && rankIndex in 0 until BOARD_SIZE
+        }
+
         // Prođi kroz sve figure protivničke boje
         for ((pieceSquare, piece) in pieces) {
             if (piece.color == opponentColor) {
                 // Dobavi "sirove" (moguće) poteze za tu figuru
-                // POZIV NOVE LOKACIJE: piece.type.getRawMoves
                 val rawMoves = piece.type.getRawMoves(pieceSquare, piece.color)
 
                 // Proveri da li se targetSquare nalazi među sirovim potezima
                 if (rawMoves.contains(targetSquare)) {
                     // Dodatna provera za klizeće figure (kraljica, top, lovac)
-                    // POZIV NOVE LOKACIJE: piece.type.isSlidingPiece
                     if (piece.type.isSlidingPiece()) {
                         if (isPathClear(pieceSquare, targetSquare)) {
                             return Pair(pieceSquare, piece) // Napadnuto i putanja je čista
@@ -404,17 +402,27 @@ data class ChessBoard(val pieces: Map<Square, Piece>) {
                         // Za ostale figure (skakač, kralj, pešak), putanja nije bitna
                         // Posebna provera za pešake, jer oni napadaju dijagonalno, a kreću se pravo
                         if (piece.type == PieceType.PAWN) {
-                            val pawnAttackMoves = if (piece.color == PieceColor.WHITE) {
-                                listOf(Square.fromCoordinates(pieceSquare.fileIndex + 1, pieceSquare.rankIndex + 1),
-                                    Square.fromCoordinates(pieceSquare.fileIndex - 1, pieceSquare.rankIndex + 1))
-                            } else {
-                                listOf(Square.fromCoordinates(pieceSquare.fileIndex + 1, pieceSquare.rankIndex - 1),
-                                    Square.fromCoordinates(pieceSquare.fileIndex - 1, pieceSquare.rankIndex - 1))
+                            val pawnAttackSquares = mutableListOf<Square>()
+                            val direction = if (piece.color == PieceColor.WHITE) 1 else -1
+
+                            // Proveri dijagonalne napade i dodaj samo validne kvadrate
+                            val attack1File = pieceSquare.fileIndex + 1
+                            val attack1Rank = pieceSquare.rankIndex + direction
+                            if (isValidCoordinate(attack1File, attack1Rank)) {
+                                pawnAttackSquares.add(Square.fromCoordinates(attack1File, attack1Rank))
                             }
-                            if (pawnAttackMoves.contains(targetSquare)) {
+
+                            val attack2File = pieceSquare.fileIndex - 1
+                            val attack2Rank = pieceSquare.rankIndex + direction
+                            if (isValidCoordinate(attack2File, attack2Rank)) {
+                                pawnAttackSquares.add(Square.fromCoordinates(attack2File, attack2Rank))
+                            }
+
+                            if (pawnAttackSquares.contains(targetSquare)) {
                                 return Pair(pieceSquare, piece)
                             }
                         } else {
+                            // Za skakača i kralja, ako je rawMove validan i sadrži targetSquare, onda je napadnuto
                             return Pair(pieceSquare, piece) // Napadnuto
                         }
                     }

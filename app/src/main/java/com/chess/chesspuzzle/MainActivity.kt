@@ -158,7 +158,8 @@ fun MainMenu(playerName: String) {
 
             Button(
                 onClick = {
-                    val intent = Intent(context, SolutionDisplayActivity::class.java)
+                    // PREPROGRAMIRANO: Sada pokrećemo SolverTestActivity
+                    val intent = Intent(context, SolverTestActivity::class.java)
                     context.startActivity(intent)
                 },
                 modifier = Modifier
