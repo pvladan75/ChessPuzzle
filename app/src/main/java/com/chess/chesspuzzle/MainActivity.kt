@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import com.chess.chesspuzzle.modul1.FigureSelectionActivity
 import com.chess.chesspuzzle.modul1.HighScoresActivity
 import com.chess.chesspuzzle.modul1.SolutionDisplayActivity
+import com.chess.chesspuzzle.modul2.Modul2GameActivity // <--- NOVI IMPORT!
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,11 +121,16 @@ fun MainMenu(playerName: String) {
                 Text("Modul 1: Uništi sve figure protivnika")
             }
             Button(
-                onClick = { /* Implementiraj logiku za Modul 2 */ },
+                // <--- IZMENA OVDE! Sada pokrećemo Modul2GameActivity
+                onClick = {
+                    val intent = Intent(context, Modul2GameActivity::class.java)
+                    intent.putExtra("playerName", playerName) // Prosleđujemo ime igrača i Modulu 2
+                    context.startActivity(intent)
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                enabled = false
+                enabled = true // <--- OMOGUĆILI SMO DUGME
             ) {
                 Text("Modul 2: Pomoć pri učenju")
             }

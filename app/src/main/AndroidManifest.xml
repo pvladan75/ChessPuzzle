@@ -44,6 +44,14 @@
             android:label="Najbolji Rezultati"
             android:theme="@style/Theme.ChessPuzzle" />
         <activity
+            android:name=".modul2.Modul2GameScreenActivity"
+            android:exported="false"
+            android:label="Modul 2 Igra" />
+        <activity
+            android:name=".modul2.Modul2GameActivity"
+            android:exported="false"
+            android:label="Modul 2: Pomoć pri učenju" />
+        <activity
             android:name=".modul1.SolutionDisplayActivity"
             android:exported="false" />
         <activity

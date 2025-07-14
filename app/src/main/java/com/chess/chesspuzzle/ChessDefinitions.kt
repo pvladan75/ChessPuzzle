@@ -5,7 +5,8 @@ import java.util.Date
 // Postavljamo BOARD_SIZE kao top-level konstantu
 const val BOARD_SIZE = 8
 // --- ENUMS ---
-enum class PieceType {
+enum class Difficulty { EASY, MEDIUM, HARD }
+    enum class PieceType {
     PAWN,
     KNIGHT,
     BISHOP, // <--- ISPRAVLJENO: Bilo je BISHop, sada je BISHOP
