@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.ChessBoard
+import com.chess.chesspuzzle.ChessCore
 import com.chess.chesspuzzle.Piece
 import com.chess.chesspuzzle.PieceColor
 import com.chess.chesspuzzle.PieceType

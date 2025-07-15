@@ -1,12 +1,6 @@
-package com.chess.chesspuzzle.modul1
+package com.chess.chesspuzzle
 
 import android.util.Log
-import com.chess.chesspuzzle.ChessBoard
-import com.chess.chesspuzzle.Move
-import com.chess.chesspuzzle.Piece
-import com.chess.chesspuzzle.PieceColor
-import com.chess.chesspuzzle.PieceType
-import com.chess.chesspuzzle.Square
 import java.util.LinkedList // Potrebno za BFS u findCaptureTargetSquares
 
 object ChessCore {
@@ -348,7 +342,7 @@ object ChessCore {
         val newRank = this.rank + rankOffset
 
         // BOARD_SIZE je konstanta u top-level paketu com.chess.chesspuzzle
-        if (newFileInt >= 'a'.code && newFileInt < ('a'.code + com.chess.chesspuzzle.BOARD_SIZE) && newRank > 0 && newRank <= com.chess.chesspuzzle.BOARD_SIZE) {
+        if (newFileInt >= 'a'.code && newFileInt < ('a'.code + BOARD_SIZE) && newRank > 0 && newRank <= BOARD_SIZE) {
             return Square.fromCoordinates(newFileInt - 'a'.code, newRank - 1)
         }
         return null

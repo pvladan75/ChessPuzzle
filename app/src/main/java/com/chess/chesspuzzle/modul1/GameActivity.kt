@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.ChessBoard
+import com.chess.chesspuzzle.ChessCore
 import com.chess.chesspuzzle.Piece
 import com.chess.chesspuzzle.PieceColor
 import com.chess.chesspuzzle.PieceType

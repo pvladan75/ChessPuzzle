@@ -2,7 +2,7 @@ package com.chess.chesspuzzle.modul1.logic
 
 import android.util.Log
 import com.chess.chesspuzzle.ChessBoard
-import com.chess.chesspuzzle.modul1.ChessCore
+import com.chess.chesspuzzle.ChessCore
 import com.chess.chesspuzzle.modul1.Difficulty
 import com.chess.chesspuzzle.modul1.GameStatusResult
 import com.chess.chesspuzzle.Piece

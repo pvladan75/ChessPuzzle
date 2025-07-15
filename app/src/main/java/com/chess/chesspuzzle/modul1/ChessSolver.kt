@@ -2,6 +2,7 @@ package com.chess.chesspuzzle.modul1
 
 import android.util.Log
 import com.chess.chesspuzzle.ChessBoard
+import com.chess.chesspuzzle.ChessCore
 import com.chess.chesspuzzle.Piece
 import com.chess.chesspuzzle.PieceColor
 import com.chess.chesspuzzle.PieceType

@@ -4,8 +4,7 @@ import com.chess.chesspuzzle.ChessBoard
 import com.chess.chesspuzzle.Move
 import com.chess.chesspuzzle.PieceColor
 import com.chess.chesspuzzle.PieceType
-import com.chess.chesspuzzle.Square
-import com.chess.chesspuzzle.modul1.ChessCore // Uverite se da je putanja do ChessCore ispravna
+import com.chess.chesspuzzle.ChessCore // Uverite se da je putanja do ChessCore ispravna
 
 class Module3Rules : PuzzleRules {
 
