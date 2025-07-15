@@ -2,23 +2,21 @@ package com.chess.chesspuzzle.modul1
 
 import android.util.Log
 import com.chess.chesspuzzle.ChessBoard
+import com.chess.chesspuzzle.Move
 import com.chess.chesspuzzle.Piece
 import com.chess.chesspuzzle.PieceColor
 import com.chess.chesspuzzle.PieceType
 import com.chess.chesspuzzle.Square
-import java.util.LinkedList
+import java.util.LinkedList // Potrebno za BFS u findCaptureTargetSquares
 
 object ChessCore {
 
     private const val TAG = "ChessCore"
 
-    // --- Postojeće funkcije getValidMoves, getSquaresBetween, isPathClear, Square.offset ostaju nepromenjene ---
-
     /**
      * Vraća listu svih legalnih polja na koja se data figura može pomeriti
-     * sa date početne pozicije na datoj tabli, u skladu sa osnovnim šahovskim pravilima.
-     * NE uzima u obzir pravila specifična za zagonetku (poput "ne vraćanja na posećena polja")
-     * niti je li potez hvatanje.
+     * sa date početne pozicije na datoj tabli, u skladu sa osnovnim šahovskim pravilima KRETANJA.
+     * NE uzima u obzir da li potez ostavlja/stavlja kralja u šah.
      *
      * @param board Trenutna šahovska tabla.
      * @param piece Figura za koju se traže potezi.
@@ -72,7 +70,7 @@ object ChessCore {
                             if (targetPiece.color != piece.color) {
                                 validMoves.add(currentSquare)
                             }
-                            break
+                            break // Zaustavi se ako je naišla na figuru
                         }
                         currentSquare = currentSquare.offset(df, dr)
                     }
@@ -107,7 +105,7 @@ object ChessCore {
                             if (targetPiece.color != piece.color) {
                                 validMoves.add(currentSquare)
                             }
-                            break
+                            break // Zaustavi se ako je naišla na figuru
                         }
                         currentSquare = currentSquare.offset(df, dr)
                     }
@@ -130,7 +128,7 @@ object ChessCore {
                             if (targetPiece.color != piece.color) {
                                 validMoves.add(currentSquare)
                             }
-                            break
+                            break // Zaustavi se ako je naišla na figuru
                         }
                         currentSquare = currentSquare.offset(df, dr)
                     }
@@ -192,6 +190,7 @@ object ChessCore {
             if (currentSquare == to) {
                 break
             }
+            // Provera da li je currentSquare validno polje pre dodavanja
             if (currentSquare.file !in 'a'..'h' || currentSquare.rank !in 1..8) {
                 break
             }
@@ -218,11 +217,14 @@ object ChessCore {
             return true
         }
 
+        // Za pešaka se isPathClear koristi samo za kretanje napred (jedan ili dva koraka)
+        // Hvatanje je dijagonalno i ne zahteva proveru putanje.
         if (pieceType == PieceType.PAWN) {
             val squaresBetween = getSquaresBetween(fromSquare, toSquare)
             return squaresBetween.all { board.getPiece(it).type == PieceType.NONE }
         }
 
+        // Za klizeće figure
         val squaresBetween = getSquaresBetween(fromSquare, toSquare)
         for (square in squaresBetween) {
             if (board.getPiece(square).type != PieceType.NONE) {
@@ -232,7 +234,6 @@ object ChessCore {
         return true
     }
 
-    // --- NOVA FUNKCIJA ZA PRONALAŽENJE CILJNIH POLJA ZA HVATANJE ---
     /**
      * Traži `numCaptures` jedinstvenih Praznih Polja koja data bela figura može da uhvati.
      * Putanja figure ne sme da se vraća na prethodno posećena polja (uključujući tranzitna).
@@ -267,20 +268,21 @@ object ChessCore {
         val visitedStates = mutableSetOf<Pair<Square, Int>>()
         visitedStates.add(startSquare to 0)
 
-        Log.d(TAG, "Traženje ${numCaptures} ciljnih polja za ${piece.type} sa ${startSquare}. Globalno zauzeti: $globalOccupiedAndTargetSquares")
+        Log.d(TAG, "Traženje $numCaptures ciljnih polja za ${piece.type} sa ${startSquare}. Globalno zauzeti: $globalOccupiedAndTargetSquares")
 
         while (queue.isNotEmpty()) {
             val (currentSquare, currentTargets, visitedInPath) = queue.removeFirst()
 
             // Ako smo pronašli dovoljno meta, vratimo ih
             if (currentTargets.size == numCaptures) {
-                Log.d(TAG, "Pronađeno ${numCaptures} ciljnih polja za ${piece.type}: $currentTargets")
+                Log.d(TAG, "Pronađeno $numCaptures ciljnih polja za ${piece.type}: $currentTargets")
                 return currentTargets
             }
 
+            // Koristi getValidMoves za sirove šahovske poteze
             val possibleMoves = getValidMoves(board, piece, currentSquare)
 
-            for (nextSquare in possibleMoves.shuffled()) {
+            for (nextSquare in possibleMoves.shuffled()) { // Randomizacija može pomoći u raznolikosti generisanih pozicija
                 // Predviđamo nova posećena polja za sledeće stanje
                 val nextVisitedInPath = visitedInPath.toMutableSet()
                 nextVisitedInPath.add(nextSquare)
@@ -303,15 +305,14 @@ object ChessCore {
 
                 // 3. Za klizne figure (ROOK, BISHOP, QUEEN), proveri da li putanja prelazi preko
                 // globalno zauzetih ili već posećenih polja (osim startSquare i nextSquare).
-                // Knight i King ne moraju da brinu o "čistoj" putanji u ovom smislu, već samo o odredištu.
-                if (piece.type == PieceType.ROOK || piece.type == PieceType.BISHOP || piece.type == PieceType.QUEEN) {
+                if (piece.type.isSlidingPiece()) { // Koristi isSlidingPiece ekstenziju
                     val squaresBetween = getSquaresBetween(currentSquare, nextSquare)
                     val isBlockedByObstacle = squaresBetween.any {
                         // Da li je tranzitno polje zauzeto bilo kojom figurom
                         board.getPiece(it).type != PieceType.NONE ||
                                 // Ili da li je već planirana meta za drugu belu figuru
                                 globalOccupiedAndTargetSquares.contains(it) ||
-                                // Ili da li je već posećeno u ovoj putanji (ovo bi trebalo da bude redundantno s obzirom na visitedInPath.contains(nextSquare) iznad)
+                                // Ili da li je već posećeno u ovoj putanji
                                 visitedInPath.contains(it)
                     }
                     if (isBlockedByObstacle) {
@@ -322,22 +323,21 @@ object ChessCore {
 
                 // Ključna pretpostavka: Ako je stigao do ovde, nextSquare je PRAZNO polje i potencijalna meta
                 val nextTargets = currentTargets.toMutableSet()
-                if (board.getPiece(nextSquare).type == PieceType.NONE) { // Moramo uhvatiti PRAZNO polje
+                if (board.getPiece(nextSquare).type == PieceType.NONE) { // Moramo uhvatiti PRAZNO polje za generisanje
                     nextTargets.add(nextSquare)
                 }
 
                 // Dodaj stanje u red samo ako ga nismo već posetili sa istim ili boljim (više meta) rezultatom
                 val newState = nextSquare to nextTargets.size
-                if (visitedStates.add(newState)) { // Set.add returns true if element was added (not already present)
+                if (visitedStates.add(newState)) { // Set.add vraća true ako je element dodat (nije već prisutan)
                     queue.add(Triple(nextSquare, nextTargets, nextVisitedInPath))
                 }
             }
         }
 
-        Log.d(TAG, "Nije pronađeno ${numCaptures} ciljnih polja za ${piece.type} sa ${startSquare}.")
+        Log.d(TAG, "Nije pronađeno $numCaptures ciljnih polja za ${piece.type} sa ${startSquare}.")
         return null // Nije pronađena putanja željene dužine/broja meta
     }
-
 
     /**
      * Ekstenziona funkcija za Square koja vraća novo Square polje pomereno za date ofsete.
@@ -347,13 +347,13 @@ object ChessCore {
         val newFileInt = this.file.code + fileOffset
         val newRank = this.rank + rankOffset
 
-        if (newFileInt >= 'a'.code && newFileInt <= 'h'.code && newRank in 1..8) {
+        // BOARD_SIZE je konstanta u top-level paketu com.chess.chesspuzzle
+        if (newFileInt >= 'a'.code && newFileInt < ('a'.code + com.chess.chesspuzzle.BOARD_SIZE) && newRank > 0 && newRank <= com.chess.chesspuzzle.BOARD_SIZE) {
             return Square.fromCoordinates(newFileInt - 'a'.code, newRank - 1)
         }
         return null
     }
 
-    // --- DODATO: Pomoćna funkcija za parsiranje UCI stringa "fromSquaretoSquare" u Pair<Square, Square> ---
     /**
      * Pomoćna funkcija za parsiranje UCI stringa "fromSquaretoSquare" u Pair<Square, Square>.
      * Npr. "e2e4" -> Pair(Square('e',2), Square('e',4))
@@ -375,7 +375,6 @@ object ChessCore {
         }
     }
 
-    // --- DODATO: Funkcija za prebrojavanje figura određene boje na tabli ---
     /**
      * Prebrojava figure određene boje na datoj šahovskoj tabli.
      *
@@ -395,5 +394,31 @@ object ChessCore {
             }
         }
         return counts
+    }
+
+    /**
+     * Generiše SVE šahovski legalne poteze za datog igrača,
+     * uzimajući u obzir samo pravila kretanja figura i prepreke.
+     * NE proverava da li potez ostavlja/stavlja kralja u šah,
+     * jer ta provera nije relevantna za zahteve vaših zagonetki (beli kralj nije u šahu, crni može biti).
+     *
+     * @param board Trenutna šahovska tabla.
+     * @param playerColor Boja igrača za koga se generišu potezi.
+     * @return Lista Move objakata koji predstavljaju sve šahovski legalne poteze.
+     */
+    fun getAllLegalChessMoves(board: ChessBoard, playerColor: PieceColor): List<Move> {
+        val legalMoves = mutableListOf<Move>()
+        val pieces = board.getPiecesMapFromBoard(playerColor) // Dobavi sve figure date boje
+
+        for ((fromSquare, piece) in pieces) {
+            val validDestinations = getValidMoves(board, piece, fromSquare) // Koristi vašu postojeću getValidMoves
+
+            for (toSquare in validDestinations) {
+                // S obzirom na to da ne proveravamo šah na belog kralja, svaki potez koji getValidMoves vrati
+                // je "legalan" u kontekstu kretanja figura i prepreka.
+                legalMoves.add(Move(fromSquare, toSquare))
+            }
+        }
+        return legalMoves
     }
 }
