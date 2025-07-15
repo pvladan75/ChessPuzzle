@@ -13,9 +13,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chess.chesspuzzle.ui.theme.ChessPuzzleTheme
-import com.chess.chesspuzzle.modul2.PuzzleSolver // Import za Modul2 solver
 import kotlinx.coroutines.delay
 import com.chess.chesspuzzle.modul1.ChessBoardComposable
+
+// --- NOVI IMPORTI ZA UNIVERZALNI SOLVER I PRAVILA ---
+import com.chess.chesspuzzle.solver.UniversalPuzzleSolver
+import com.chess.chesspuzzle.rules.PuzzleRules
+import com.chess.chesspuzzle.rules.Module1Rules
+import com.chess.chesspuzzle.rules.Module2Rules
+import com.chess.chesspuzzle.rules.Module3Rules
 
 // --- SolverTestActivity klasa ---
 class SolverTestActivity : ComponentActivity() {
@@ -51,9 +57,9 @@ fun SolverTestScreen() {
     var highlightedSquares: Set<Square> by remember { mutableStateOf(emptySet()) }
     var solvingMessage by remember { mutableStateOf("") }
 
-    // Stanje za odabir solvera (npr. "Modul 2 Solver")
-    var selectedSolver by remember { mutableStateOf("Modul 2 Solver") } // Podrazumevano
-    val solverOptions = listOf("Modul 2 Solver", "Modul 1 Solver (Nije implementiran)", "Modul 3 Solver (Nije implementiran)")
+    // Stanje za odabir solvera
+    var selectedSolverOption by remember { mutableStateOf("Modul 1 Solver") } // Podrazumevano na Modul 1
+    val solverOptions = listOf("Modul 1 Solver", "Modul 2 Solver", "Modul 3 Solver")
     var expanded by remember { mutableStateOf(false) } // Za DropdownMenu
 
     // Prikaz table na osnovu trenutnog poteza
@@ -65,7 +71,7 @@ fun SolverTestScreen() {
         } else if (currentMoveIndex >= 0 && currentMoveIndex < solutionMoves.size) {
             // Primeni trenutni potez
             val move = solutionMoves[currentMoveIndex]
-            currentBoard = ChessBoard.parseFenToBoard(fenInput) // Uvek resetuj tablu
+            currentBoard = ChessBoard.parseFenToBoard(fenInput) // Uvek resetuj tablu na početak
             for (i in 0..currentMoveIndex) { // Primeni sve poteze do trenutnog
                 val m = solutionMoves[i]
                 currentBoard = currentBoard.makeMoveAndCapture(m.start, m.end)
@@ -85,7 +91,6 @@ fun SolverTestScreen() {
             isPlaying = false
         }
     }
-
 
     Column(
         modifier = Modifier
@@ -110,10 +115,10 @@ fun SolverTestScreen() {
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
         ) {
             OutlinedTextField(
-                value = selectedSolver,
+                value = selectedSolverOption,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Odaberite Solver") },
+                label = { Text("Odaberite Solver Modul") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier.menuAnchor().fillMaxWidth()
             )
@@ -126,10 +131,10 @@ fun SolverTestScreen() {
                     DropdownMenuItem(
                         text = { Text(option) },
                         onClick = {
-                            selectedSolver = option
+                            selectedSolverOption = option
                             expanded = false
-                        },
-                        enabled = option == "Modul 2 Solver" // Samo Modul 2 je trenutno aktivan
+                        }
+                        // Sva dugmad su sada omogućena
                     )
                 }
             }
@@ -145,17 +150,25 @@ fun SolverTestScreen() {
                 highlightedSquares = emptySet()
                 try {
                     val initialBoardForSolver = ChessBoard.parseFenToBoard(fenInput)
-                    // Pozivanje odgovarajućeg solvera na osnovu izbora
-                    val solver = PuzzleSolver() // Kreiramo instancu PuzzleSolvera iz Modula 2
-                    val solvedMoves = solver.solve(initialBoardForSolver)
 
-                    if (solvedMoves != null) {
-                        solutionMoves = solvedMoves
-                        solvingMessage = "Rešenje pronađeno! ${solutionMoves.size} poteza."
-                        Log.d(TAG, "Solver solution: ${solutionMoves.joinToString()}")
+                    val puzzleRules: PuzzleRules = when (selectedSolverOption) {
+                        "Modul 1 Solver" -> Module1Rules()
+                        "Modul 2 Solver" -> Module2Rules()
+                        "Modul 3 Solver" -> Module3Rules()
+                        else -> Module1Rules() // Podrazumevano
+                    }
+
+                    // Kreiramo instancu UniversalPuzzleSolvera sa odabranim pravilima
+                    val universalSolver = UniversalPuzzleSolver(puzzleRules)
+                    val solution = universalSolver.solve(initialBoardForSolver, PieceColor.WHITE) // Uvek beli igrač rešava
+
+                    if (solution.isSolved) {
+                        solutionMoves = solution.moves
+                        solvingMessage = "Rešenje pronađeno! ${solution.moves.size} poteza."
+                        Log.d(TAG, "Solver solution: ${solution.moves.joinToString()}")
                     } else {
-                        solvingMessage = "Nije pronađeno rešenje za ovu poziciju."
-                        Log.w(TAG, "Solver found no solution for: $fenInput")
+                        solvingMessage = solution.message
+                        Log.w(TAG, "Solver found no solution for: $fenInput - ${solution.message}")
                     }
                 } catch (e: Exception) {
                     solvingMessage = "Greška pri parsiranju FEN-a ili pokretanju solvera: ${e.message}"
@@ -180,7 +193,7 @@ fun SolverTestScreen() {
 
             if (currentMoveIndex >= 0 && currentMoveIndex < solutionMoves.size) {
                 Text(
-                    text = "Trenutni potez: ${solutionMoves[currentMoveIndex]}",
+                    text = "Trenutni potez: ${solutionMoves[currentMoveIndex].start}-${solutionMoves[currentMoveIndex].end}", // Prikaz poteza
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )

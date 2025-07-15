@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.chess.chesspuzzle.*
+import com.chess.chesspuzzle.Square
 
 // Uverite se da je BOARD_SIZE definisan u ChessDefinitions.kt ili sličnom globalnom fajlu
 // const val BOARD_SIZE = 8 // Primer, ako nije globalno definisan
